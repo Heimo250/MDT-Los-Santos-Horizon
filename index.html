@@ -1,0 +1,867 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DoJ & LSPD MDT System</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+        :root {
+            --bg-dark: #121212;
+            --bg-panel: #1e1e1e;
+            --accent: #375a7f;
+            --text-main: #e0e0e0;
+            --lspd-blue: #0d6efd;
+            --doj-gold: #ffc107;
+        }
+
+        body {
+            background-color: var(--bg-dark);
+            color: var(--text-main);
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            overflow-x: hidden;
+        }
+
+        /* Login Screen */
+        #login-screen {
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: radial-gradient(circle at center, #2c3e50 0%, #000000 100%);
+        }
+
+        /* MDT Layout */
+        #mdt-app {
+            display: none;
+            min-height: 100vh;
+        }
+
+        .sidebar {
+            background-color: var(--bg-panel);
+            border-right: 1px solid #333;
+            min-height: 100vh;
+            padding-top: 20px;
+        }
+
+        .nav-link {
+            color: #aaa;
+            margin-bottom: 5px;
+            border-radius: 5px;
+            padding: 10px 15px;
+        }
+
+        .nav-link:hover, .nav-link.active {
+            background-color: var(--accent);
+            color: white;
+        }
+
+        .nav-link i { margin-right: 10px; width: 20px; text-align: center; }
+
+        .content-area {
+            padding: 20px;
+        }
+
+        /* Cards & Panels */
+        .card {
+            background-color: var(--bg-panel);
+            border: 1px solid #333;
+            color: white;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        }
+
+        .card-header {
+            border-bottom: 1px solid #444;
+            font-weight: bold;
+            background-color: rgba(255,255,255,0.05);
+        }
+
+        .form-control, .form-select {
+            background-color: #2b2b2b;
+            border: 1px solid #444;
+            color: white;
+        }
+
+        .form-control:focus {
+            background-color: #333;
+            color: white;
+            border-color: var(--accent);
+            box-shadow: none;
+        }
+
+        /* Util Classes */
+        .badge-wanted { background-color: #dc3545; animation: pulse 2s infinite; }
+        .hidden { display: none !important; }
+        
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.6; }
+            100% { opacity: 1; }
+        }
+
+        /* Print styles for Export */
+        @media print {
+            .sidebar, .no-print { display: none; }
+            .content-area { width: 100%; padding: 0; }
+            .card { border: none; box-shadow: none; }
+            body { background-color: white; color: black; }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="login-screen">
+        <div class="card p-4" style="width: 400px;">
+            <div class="text-center mb-4">
+                <i class="fas fa-balance-scale fa-3x text-white"></i>
+                <h3 class="mt-2">MDT Access</h3>
+                <small class="text-muted">Department of Justice & LSPD</small>
+            </div>
+            <form id="loginForm">
+                <div class="mb-3">
+                    <label class="form-label">Benutzername</label>
+                    <input type="text" id="loginUser" class="form-control" placeholder="Vorname.Nachname" required>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Passwort</label>
+                    <input type="password" id="loginPass" class="form-control" required>
+                </div>
+                <button type="submit" class="btn btn-primary w-100">Einloggen</button>
+                <div id="loginError" class="text-danger mt-2 text-center small"></div>
+            </form>
+        </div>
+    </div>
+
+    <div id="mdt-app" class="container-fluid">
+        <div class="row">
+            <div class="col-md-2 sidebar d-flex flex-column">
+                <div class="text-center mb-4 text-white">
+                    <div class="fw-bold" id="currentUserDisplay">Officer Doe</div>
+                    <small id="currentRankDisplay" class="text-muted">LSPD Officer</small>
+                </div>
+                
+                <nav class="nav flex-column">
+                    <a class="nav-link active" href="#" onclick="showView('dashboard')"><i class="fas fa-home"></i> Startseite</a>
+                    <a class="nav-link" href="#" onclick="showView('persons')"><i class="fas fa-users"></i> Personenregister</a>
+                    <a class="nav-link" href="#" onclick="showView('vehicles')"><i class="fas fa-car"></i> Fahrzeuge</a>
+                    <a class="nav-link" href="#" onclick="showView('reports')"><i class="fas fa-file-alt"></i> Einsatzberichte</a>
+                    <a class="nav-link" href="#" onclick="showView('penalcode')"><i class="fas fa-gavel"></i> Strafrechner</a>
+                    <a class="nav-link" href="#" onclick="showView('employees')"><i class="fas fa-id-badge"></i> Personal / Notizen</a>
+                    <hr>
+                    <a class="nav-link text-danger" href="#" onclick="logout()"><i class="fas fa-sign-out-alt"></i> Abmelden</a>
+                </nav>
+            </div>
+
+            <div class="col-md-10 content-area">
+                
+                <div id="view-dashboard" class="view-section">
+                    <h2 class="mb-4">Übersicht</h2>
+                    <div class="row g-3">
+                        <div class="col-md-3">
+                            <div class="card p-3 text-center" onclick="showView('persons')">
+                                <i class="fas fa-search fa-2x mb-2 text-primary"></i>
+                                <h6>Person suchen</h6>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card p-3 text-center" onclick="showView('vehicles')">
+                                <i class="fas fa-car fa-2x mb-2 text-warning"></i>
+                                <h6>KFZ Kennzeichen</h6>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card p-3 text-center" onclick="showView('penalcode')">
+                                <i class="fas fa-book fa-2x mb-2 text-info"></i>
+                                <h6>Gesetze (Laws)</h6>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card p-3 text-center border-danger">
+                                <i class="fas fa-exclamation-triangle fa-2x mb-2 text-danger"></i>
+                                <h6>WANTED LISTE</h6>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card mt-4">
+                        <div class="card-header bg-danger text-white"><i class="fas fa-broadcast-tower"></i> Aktive Fahndungen</div>
+                        <div class="card-body" id="dashboard-wanteds">
+                            <p class="text-muted">Lade Fahndungen...</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="view-persons" class="view-section hidden">
+                    <div class="d-flex justify-content-between mb-3">
+                        <h2>Personenregister</h2>
+                        <button class="btn btn-success" onclick="openAddPersonModal()"><i class="fas fa-plus"></i> Neue Person</button>
+                    </div>
+                    
+                    <div class="input-group mb-4">
+                        <input type="text" id="personSearchInput" class="form-control" placeholder="Name, Telefon oder Alias suchen...">
+                        <button class="btn btn-primary" onclick="searchPerson()">Suchen</button>
+                    </div>
+
+                    <div id="person-results" class="row"></div>
+                </div>
+
+                <div id="view-vehicles" class="view-section hidden">
+                    <div class="d-flex justify-content-between mb-3">
+                        <h2>Fahrzeugdatenbank</h2>
+                        <button class="btn btn-success" onclick="openAddVehicleModal()"><i class="fas fa-plus"></i> Neues Fahrzeug</button>
+                    </div>
+                    <div class="input-group mb-4">
+                        <input type="text" id="vehicleSearchInput" class="form-control" placeholder="Kennzeichen (Plate) suchen...">
+                        <button class="btn btn-primary" onclick="searchVehicle()">Suchen</button>
+                    </div>
+                    <div id="vehicle-results"></div>
+                </div>
+
+                <div id="view-penalcode" class="view-section hidden">
+                    <h2>Strafgesetzbuch & Rechner</h2>
+                    <div class="row">
+                        <div class="col-md-7">
+                            <input type="text" id="lawSearch" class="form-control mb-3" placeholder="Gesetz suchen..." onkeyup="filterLaws()">
+                            <div id="law-list" class="list-group" style="max-height: 600px; overflow-y: auto;">
+                                </div>
+                        </div>
+                        <div class="col-md-5">
+                            <div class="card sticky-top" style="top: 20px;">
+                                <div class="card-header">Kalkulator</div>
+                                <div class="card-body">
+                                    <ul id="selected-laws" class="list-group mb-3"></ul>
+                                    <label class="form-label">Strafmaß Anpassung (%)</label>
+                                    <input type="range" class="form-range" id="fineAdjustment" min="0" max="200" value="100" oninput="updateCalculator()">
+                                    <div class="d-flex justify-content-between">
+                                        <span>Anpassung: <span id="adjValue">100</span>%</span>
+                                    </div>
+                                    <hr>
+                                    <h4>Total: <span id="calcTotal" class="text-success">$0</span></h4>
+                                    <h4>Haftzeit: <span id="calcJail" class="text-danger">0 Hafen</span></h4>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="view-employees" class="view-section hidden">
+                    <ul class="nav nav-tabs mb-3">
+                        <li class="nav-item"><a class="nav-link active" data-bs-toggle="tab" href="#tab-notes">Meine Notizen</a></li>
+                        <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-roster">Dienstblatt & Management</a></li>
+                    </ul>
+                    
+                    <div class="tab-content">
+                        <div class="tab-pane fade show active" id="tab-notes">
+                            <div class="card">
+                                <div class="card-body">
+                                    <h5 class="card-title">Persönliche Notizen (Verschlüsselt)</h5>
+                                    <textarea id="personalNotes" class="form-control" rows="10" placeholder="Schreibe hier..."></textarea>
+                                    <button class="btn btn-primary mt-2" onclick="saveNotes()">Speichern</button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="tab-pane fade" id="tab-roster">
+                            <div id="roster-management-area">
+                                <button class="btn btn-success mb-3" onclick="openRegisterUserModal()">Mitarbeiter einstellen/registrieren</button>
+                                <table class="table table-dark table-striped">
+                                    <thead><tr><th>Name</th><th>Rang</th><th>Aktion</th></tr></thead>
+                                    <tbody id="roster-table-body"></tbody>
+                                </table>
+                            </div>
+                            <div id="roster-denied" class="alert alert-warning hidden">
+                                Du hast keine Berechtigung, das Personal zu verwalten.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div id="view-reports" class="view-section hidden">
+                    <div class="d-flex justify-content-between mb-3">
+                        <h2>Einsatzberichte</h2>
+                        <button class="btn btn-primary" onclick="createNewReport()"><i class="fas fa-plus"></i> Bericht verfassen</button>
+                    </div>
+                    <div id="reports-list" class="row">
+                        </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="addPersonModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content bg-dark text-white">
+                <div class="modal-header">
+                    <h5 class="modal-title">Person anlegen</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="addPersonForm">
+                        <div class="row">
+                            <div class="col-md-6 mb-2"><label>Vorname</label><input type="text" class="form-control" id="pFirst" required></div>
+                            <div class="col-md-6 mb-2"><label>Nachname</label><input type="text" class="form-control" id="pLast" required></div>
+                            <div class="col-md-4 mb-2"><label>Geburtsdatum</label><input type="date" class="form-control" id="pDob" required></div>
+                            <div class="col-md-4 mb-2"><label>Größe (cm)</label><input type="number" class="form-control" id="pHeight" required></div>
+                            <div class="col-md-4 mb-2"><label>Telefon (opt)</label><input type="text" class="form-control" id="pPhone"></div>
+                            <div class="col-md-12 mb-2"><label>Foto URL (opt)</label><input type="text" class="form-control" id="pImg"></div>
+                            <div class="col-md-12 mb-2"><label>Wohnhaft (opt)</label><input type="text" class="form-control" id="pAddress"></div>
+                            <div class="col-md-12 mb-2">
+                                <label>Tags</label>
+                                <div class="d-flex flex-wrap gap-2">
+                                    <div class="form-check"><input type="checkbox" class="form-check-input" value="Wanted"><label>Wanted</label></div>
+                                    <div class="form-check"><input type="checkbox" class="form-check-input" value="Drive A"><label>Lizens A</label></div>
+                                    <div class="form-check"><input type="checkbox" class="form-check-input" value="Drive B"><label>Lizens B</label></div>
+                                    <div class="form-check"><input type="checkbox" class="form-check-input" value="Waffenschein"><label>Waffenschein</label></div>
+                                </div>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-primary" onclick="submitNewPerson()">Speichern</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="personDetailModal" tabindex="-1">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content bg-dark text-white">
+                <div class="modal-header">
+                    <h5 class="modal-title">Personenakte</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row">
+                        <div class="col-md-3 text-center">
+                            <img id="detail-img" src="https://via.placeholder.com/150" class="img-fluid rounded mb-2">
+                            <h4 id="detail-name">Max Mustermann</h4>
+                            <div id="detail-tags" class="mb-2"></div>
+                            <button class="btn btn-sm btn-outline-light w-100 mb-1" onclick="exportToPDF()">PDF Export</button>
+                        </div>
+                        <div class="col-md-9">
+                            <ul class="nav nav-tabs mb-2" id="personTabs">
+                                <li class="nav-item"><a class="nav-link active" data-bs-toggle="tab" href="#p-general">Allgemein</a></li>
+                                <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#p-records">Akten</a></li>
+                                <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#p-vehicles">Fahrzeuge</a></li>
+                                <li class="nav-item"><a class="nav-link hidden" id="tab-investigation-link" data-bs-toggle="tab" href="#p-investigation">Ermittlungen</a></li>
+                                <li class="nav-item"><a class="nav-link hidden text-danger" id="tab-ia-link" data-bs-toggle="tab" href="#p-ia">Internal Affairs</a></li>
+                            </ul>
+                            <div class="tab-content">
+                                <div class="tab-pane fade show active" id="p-general">
+                                    <p><strong>Geboren:</strong> <span id="detail-dob"></span></p>
+                                    <p><strong>Größe:</strong> <span id="detail-height"></span></p>
+                                    <p><strong>Adresse:</strong> <span id="detail-address"></span></p>
+                                </div>
+                                <div class="tab-pane fade" id="p-records">
+                                    <button class="btn btn-sm btn-danger mb-2" onclick="addRecordEntry()">Akte hinzufügen</button>
+                                    <div id="detail-records-list"></div>
+                                </div>
+                                <div class="tab-pane fade" id="p-vehicles">
+                                    <div id="detail-vehicles-list"></div>
+                                </div>
+                                <div class="tab-pane fade" id="p-investigation">
+                                    <button class="btn btn-sm btn-warning mb-2" onclick="addInvestigation()">Neue Ermittlung</button>
+                                    <div id="detail-investigation-list"></div>
+                                </div>
+                                <div class="tab-pane fade" id="p-ia">
+                                    <textarea id="ia-notes" class="form-control" rows="5"></textarea>
+                                    <button class="btn btn-danger mt-2" onclick="saveIA()">IA Update</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="registerUserModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content bg-dark text-white">
+                <div class="modal-header"><h5 class="modal-title">Mitarbeiter Registrieren</h5></div>
+                <div class="modal-body">
+                    <form id="regForm">
+                        <input type="text" id="regUser" class="form-control mb-2" placeholder="Benutzername (Vorname.Nachname)" required>
+                        <input type="password" id="regPass" class="form-control mb-2" placeholder="Passwort" required>
+                        <select id="regRank" class="form-select mb-2"></select>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="autoCreateCiv" checked>
+                            <label class="form-check-label">Automatisch Zivilakte anlegen</label>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-success" onclick="processRegistration()">Registrieren</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+    <script>
+        // ==========================================
+        // KONFIGURATION
+        // ==========================================
+        const firebaseConfig = {
+            // FÜGE HIER DEINE FIREBASE KEYS EIN
+            apiKey: "AIzaSyD6I01je_MrT7KzeFE7BD1IGc4amukK_6Q",
+            authDomain: "mdt-system-c18ea.firebaseapp.com",
+            projectId: "mdt-system-c18ea",
+            storageBucket: "mdt-system-c18ea.firebasestorage.app",
+            messagingSenderId: "548167432149",
+            appId: "1:548167432149:web:be1a0154c825faca622f5c"
+        };
+
+        // Firebase Init
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const db = firebase.firestore();
+
+        // GLOBALE VARIABLEN
+        let currentUser = null; // { uid, username, rank, roleInfo }
+        let currentPersonId = null; // ID der aktuell geöffneten Akte
+
+        // ==========================================
+        // DATA & LOGIC MODELS
+        // ==========================================
+        
+        // Gesetze JSON (Beispiel)
+        const penalCodeDB = [
+            { id: "§1", de: "Geschwindigkeitsüberschreitung (16-30 km/h)", fine: 500, months: 0 },
+            { id: "§2", de: "Fahren ohne Fahrerlaubnis", fine: 2000, months: 0 },
+            { id: "§3", de: "Raubüberfall", fine: 5000, months: 20 },
+            { id: "§4", de: "Mord", fine: 50000, months: 100 },
+        ];
+
+        // Ränge & Rechte Definition
+        const ROLES = {
+            "LSPD Officer": { dept: "LSPD", lvl: 1, canSeeInv: false, canManage: [] },
+            "LSPD Detective": { dept: "LSPD", lvl: 2, canSeeInv: true, canManage: [] },
+            "LSPD Sergeant": { dept: "LSPD", lvl: 3, canSeeInv: true, canManage: [] },
+            "LSPD Command": { dept: "LSPD", lvl: 4, canSeeInv: true, canManage: ["LSPD Officer", "LSPD Detective", "LSPD Sergeant"] },
+            
+            "Marshal Officer": { dept: "MARSHAL", lvl: 1, canSeeInv: false, canManage: [] },
+            "Marshal Deputy": { dept: "MARSHAL", lvl: 2, canSeeInv: true, canManage: [] },
+            "Marshal Command": { dept: "MARSHAL", lvl: 4, canSeeInv: true, canManage: ["Marshal Officer", "Marshal Deputy"] },
+
+            "Attorney": { dept: "DOJ", lvl: 1, canSeeInv: true, canManage: [], readOnly: true },
+            "District Attorney": { dept: "DOJ", lvl: 3, canSeeInv: true, canManage: ["Attorney"], readOnly: true },
+            
+            "Judge": { dept: "COURT", lvl: 3, canSeeInv: true, canManage: [], canDelete: true },
+            "Chief Justice": { dept: "COURT", lvl: 4, canSeeInv: true, canManage: ["Judge"], canDelete: true },
+            
+            "Attorney General": { dept: "ADMIN", lvl: 5, canSeeInv: true, canManage: "ALL", canDelete: true, seeIA: true }
+        };
+
+        // ==========================================
+        // AUTHENTICATION
+        // ==========================================
+        
+        // Fake Email Generator für Username Login
+        const emailSuffix = "@mdt.system";
+
+        document.getElementById('loginForm').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const user = document.getElementById('loginUser').value + emailSuffix;
+            const pass = document.getElementById('loginPass').value;
+            
+            auth.signInWithEmailAndPassword(user, pass)
+                .then(() => {
+                    // UI switch passiert in onAuthStateChanged
+                })
+                .catch((error) => {
+                    document.getElementById('loginError').innerText = "Fehler: " + error.message;
+                });
+        });
+
+        auth.onAuthStateChanged(async (user) => {
+            if (user) {
+                // Fetch User Data from Firestore 'employees' collection
+                const doc = await db.collection('employees').doc(user.uid).get();
+                if (doc.exists) {
+                    const data = doc.data();
+                    currentUser = { 
+                        uid: user.uid, 
+                        ...data, 
+                        roleInfo: ROLES[data.rank] 
+                    };
+                    initMDT();
+                } else {
+                    // Fallback für ersten Admin (Wenn DB leer ist)
+                    // WICHTIG: Dies sollte nach dem ersten Setup entfernt werden
+                    if(user.email.includes("admin")) {
+                         currentUser = { uid: user.uid, username: "Admin", rank: "Attorney General", roleInfo: ROLES["Attorney General"] };
+                         initMDT();
+                    } else {
+                        auth.signOut();
+                        alert("Benutzer nicht in Datenbank gefunden.");
+                    }
+                }
+            } else {
+                document.getElementById('login-screen').style.display = 'flex';
+                document.getElementById('mdt-app').style.display = 'none';
+            }
+        });
+
+        function logout() {
+            auth.signOut();
+            window.location.reload();
+        }
+
+        // ==========================================
+        // CORE UI LOGIC
+        // ==========================================
+
+        function initMDT() {
+            document.getElementById('login-screen').style.display = 'none';
+            document.getElementById('mdt-app').style.display = 'block';
+            
+            document.getElementById('currentUserDisplay').innerText = currentUser.username;
+            document.getElementById('currentRankDisplay').innerText = currentUser.rank;
+
+            loadLiveWanteds();
+            showView('dashboard');
+        }
+
+        function showView(viewId) {
+            document.querySelectorAll('.view-section').forEach(el => el.classList.add('hidden'));
+            document.getElementById('view-' + viewId).classList.remove('hidden');
+            
+            // View Specific Init
+            if(viewId === 'penalcode') renderLaws();
+            if(viewId === 'employees') loadEmployeeArea();
+            if(viewId === 'reports') loadReports();
+        }
+
+        // ==========================================
+        // MODULE: DASHBOARD & SEARCH
+        // ==========================================
+        function loadLiveWanteds() {
+            db.collection('civilians').where('tags', 'array-contains', 'Wanted').limit(5)
+                .onSnapshot((snapshot) => {
+                    const container = document.getElementById('dashboard-wanteds');
+                    container.innerHTML = "";
+                    if(snapshot.empty) { container.innerHTML = "Keine aktiven Fahndungen."; return;}
+                    
+                    snapshot.forEach(doc => {
+                        const d = doc.data();
+                        container.innerHTML += `<div class="alert alert-danger mb-1 p-2">${d.firstName} ${d.lastName}</div>`;
+                    });
+                });
+        }
+
+        // ==========================================
+        // MODULE: PERSONS (CRUD)
+        // ==========================================
+        
+        function openAddPersonModal() {
+            new bootstrap.Modal(document.getElementById('addPersonModal')).show();
+        }
+
+        async function submitNewPerson() {
+            const tags = Array.from(document.querySelectorAll('#addPersonForm input[type=checkbox]:checked')).map(e => e.value);
+            
+            const newPerson = {
+                firstName: document.getElementById('pFirst').value,
+                lastName: document.getElementById('pLast').value,
+                dob: document.getElementById('pDob').value,
+                height: document.getElementById('pHeight').value,
+                phone: document.getElementById('pPhone').value,
+                img: document.getElementById('pImg').value || "https://via.placeholder.com/150",
+                address: document.getElementById('pAddress').value,
+                tags: tags,
+                internalAffairs: "",
+                createdAt: firebase.firestore.FieldValue.serverTimestamp()
+            };
+
+            await db.collection('civilians').add(newPerson);
+            bootstrap.Modal.getInstance(document.getElementById('addPersonModal')).hide();
+            showView('persons'); // Refresh View
+            alert("Person angelegt");
+        }
+
+        async function searchPerson() {
+            const query = document.getElementById('personSearchInput').value.toLowerCase();
+            const resultsDiv = document.getElementById('person-results');
+            resultsDiv.innerHTML = "Suche...";
+
+            // Simple client side filtering for demo (Firestore Full Text search needs Algolia usually)
+            // Here we fetch all (Not efficient for prod, but works for MDT demo)
+            const snapshot = await db.collection('civilians').get();
+            resultsDiv.innerHTML = "";
+
+            snapshot.forEach(doc => {
+                const p = doc.data();
+                const fullName = `${p.firstName} ${p.lastName}`.toLowerCase();
+                if(fullName.includes(query) || (p.phone && p.phone.includes(query))) {
+                    const isWanted = p.tags.includes("Wanted");
+                    const card = `
+                        <div class="col-md-4 mb-3">
+                            <div class="card h-100">
+                                <div class="card-body">
+                                    <h5 class="card-title">${p.firstName} ${p.lastName} ${isWanted ? '<span class="badge badge-wanted">WANTED</span>' : ''}</h5>
+                                    <p class="card-text">Geb: ${p.dob}</p>
+                                    <button class="btn btn-sm btn-primary" onclick="openPersonFile('${doc.id}')">Akte öffnen</button>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                    resultsDiv.innerHTML += card;
+                }
+            });
+        }
+
+        async function openPersonFile(id) {
+            currentPersonId = id;
+            const doc = await db.collection('civilians').doc(id).get();
+            const p = doc.data();
+
+            document.getElementById('detail-name').innerText = p.firstName + " " + p.lastName;
+            document.getElementById('detail-dob').innerText = p.dob;
+            document.getElementById('detail-height').innerText = p.height + " cm";
+            document.getElementById('detail-address').innerText = p.address;
+            document.getElementById('detail-img').src = p.img;
+            
+            // Render Tags
+            const tagsDiv = document.getElementById('detail-tags');
+            tagsDiv.innerHTML = p.tags.map(t => `<span class="badge bg-secondary me-1">${t}</span>`).join('');
+
+            // Visibility Logic
+            const role = currentUser.roleInfo;
+            
+            // Investigations
+            const invLink = document.getElementById('tab-investigation-link');
+            if(role.canSeeInv) invLink.classList.remove('hidden');
+            else invLink.classList.add('hidden');
+
+            // Internal Affairs
+            const iaLink = document.getElementById('tab-ia-link');
+            if(role.seeIA) {
+                iaLink.classList.remove('hidden');
+                document.getElementById('ia-notes').value = p.internalAffairs || "";
+            } else {
+                iaLink.classList.add('hidden');
+            }
+
+            // Load Sub-Collections (Records, Vehicles)
+            loadPersonRecords(id);
+            loadPersonVehicles(id);
+            if(role.canSeeInv) loadPersonInvestigations(id);
+
+            new bootstrap.Modal(document.getElementById('personDetailModal')).show();
+        }
+
+        // Sub-Functions for Person File
+        async function loadPersonRecords(id) {
+            const list = document.getElementById('detail-records-list');
+            list.innerHTML = "Lade...";
+            const snap = await db.collection('civilians').doc(id).collection('records').orderBy('date', 'desc').get();
+            list.innerHTML = "";
+            snap.forEach(doc => {
+                const r = doc.data();
+                list.innerHTML += `<div class="alert alert-dark border-secondary">
+                    <small>${new Date(r.date.toDate()).toLocaleDateString()}</small><br>
+                    <strong>${r.reason}</strong><br>
+                    Strafe: $${r.fine} | Haft: ${r.jail} Mon. | Officer: ${r.officer}
+                </div>`;
+            });
+        }
+
+        // Logic to add Record (Simulated)
+        async function addRecordEntry() {
+            // In a real app, this would open the Penal Code Calculator modal pre-filled
+            const reason = prompt("Grund für Eintrag:");
+            if(!reason) return;
+            await db.collection('civilians').doc(currentPersonId).collection('records').add({
+                reason: reason,
+                fine: 0, // Simplified
+                jail: 0,
+                officer: currentUser.username,
+                date: firebase.firestore.FieldValue.serverTimestamp()
+            });
+            loadPersonRecords(currentPersonId);
+            
+            // If entry is "Wanted", update tags
+            // Logic omitted for brevity
+        }
+
+        // ==========================================
+        // MODULE: PENAL CODE
+        // ==========================================
+        let selectedLawItems = [];
+
+        function renderLaws() {
+            const list = document.getElementById('law-list');
+            list.innerHTML = "";
+            penalCodeDB.forEach(law => {
+                list.innerHTML += `
+                    <button class="list-group-item list-group-item-action bg-dark text-white border-secondary" 
+                        onclick="addToCalculator('${law.id}')">
+                        <strong>${law.id}</strong> ${law.de} 
+                        <span class="badge bg-secondary float-end">$${law.fine} | ${law.months} Mon.</span>
+                    </button>`;
+            });
+        }
+
+        function addToCalculator(lawId) {
+            const law = penalCodeDB.find(l => l.id === lawId);
+            selectedLawItems.push(law);
+            updateCalculator();
+        }
+
+        function updateCalculator() {
+            const list = document.getElementById('selected-laws');
+            const perc = parseInt(document.getElementById('fineAdjustment').value);
+            document.getElementById('adjValue').innerText = perc;
+
+            let totalFine = 0;
+            let totalJail = 0;
+
+            list.innerHTML = "";
+            selectedLawItems.forEach((law, index) => {
+                const adjFine = (law.fine * perc) / 100;
+                totalFine += adjFine;
+                totalJail += law.months;
+
+                list.innerHTML += `<li class="list-group-item bg-dark text-white d-flex justify-content-between">
+                    <span>${law.de}</span>
+                    <i class="fas fa-times text-danger" style="cursor:pointer" onclick="removeFromCalc(${index})"></i>
+                </li>`;
+            });
+
+            document.getElementById('calcTotal').innerText = "$" + totalFine.toFixed(0);
+            document.getElementById('calcJail').innerText = totalJail + " Hafen";
+        }
+
+        function removeFromCalc(index) {
+            selectedLawItems.splice(index, 1);
+            updateCalculator();
+        }
+
+        // ==========================================
+        // MODULE: EMPLOYEES & MANAGEMENT
+        // ==========================================
+        
+        async function saveNotes() {
+            const txt = document.getElementById('personalNotes').value;
+            await db.collection('employees').doc(currentUser.uid).update({ notes: txt });
+            alert("Notizen gespeichert!");
+        }
+
+        async function loadEmployeeArea() {
+            // Load own notes
+            document.getElementById('personalNotes').value = currentUser.notes || "";
+
+            // Check if can manage
+            const canManage = currentUser.roleInfo.canManage;
+            if(!canManage || (Array.isArray(canManage) && canManage.length === 0)) {
+                document.getElementById('roster-management-area').classList.add('hidden');
+                document.getElementById('roster-denied').classList.remove('hidden');
+                return;
+            }
+
+            document.getElementById('roster-management-area').classList.remove('hidden');
+            document.getElementById('roster-denied').classList.add('hidden');
+
+            const tbody = document.getElementById('roster-table-body');
+            tbody.innerHTML = "Lade...";
+
+            const snap = await db.collection('employees').get();
+            tbody.innerHTML = "";
+            
+            snap.forEach(doc => {
+                const emp = doc.data();
+                // Check Visibility Logic
+                let visible = false;
+                if(currentUser.roleInfo.canManage === "ALL") visible = true;
+                else if (Array.isArray(currentUser.roleInfo.canManage) && currentUser.roleInfo.canManage.includes(emp.rank)) visible = true;
+
+                if(visible) {
+                    tbody.innerHTML += `<tr>
+                        <td>${emp.username}</td>
+                        <td>${emp.rank}</td>
+                        <td>
+                            <button class="btn btn-sm btn-danger" onclick="fireEmployee('${doc.id}')">Entfernen</button>
+                        </td>
+                    </tr>`;
+                }
+            });
+        }
+
+        function openRegisterUserModal() {
+            // Fill Select based on what user is allowed to create
+            const select = document.getElementById('regRank');
+            select.innerHTML = "";
+            const allowed = currentUser.roleInfo.canManage;
+            
+            if(allowed === "ALL") {
+                Object.keys(ROLES).forEach(r => select.innerHTML += `<option>${r}</option>`);
+            } else {
+                allowed.forEach(r => select.innerHTML += `<option>${r}</option>`);
+            }
+            new bootstrap.Modal(document.getElementById('registerUserModal')).show();
+        }
+
+        async function processRegistration() {
+            const uUser = document.getElementById('regUser').value; // Username
+            const uPass = document.getElementById('regPass').value;
+            const uRank = document.getElementById('regRank').value;
+            const autoCiv = document.getElementById('autoCreateCiv').checked;
+
+            try {
+                // 1. Create Auth User (Email Fake)
+                const userCred = await firebase.auth().createUserWithEmailAndPassword(uUser + emailSuffix, uPass);
+                
+                // 2. Create DB Entry
+                await db.collection('employees').doc(userCred.user.uid).set({
+                    username: uUser,
+                    rank: uRank,
+                    notes: ""
+                });
+
+                // 3. Auto Create Civil Record?
+                if(autoCiv) {
+                    // Split Name
+                    const parts = uUser.split('.');
+                    if(parts.length >= 2) {
+                        // Check duplicate simplified
+                        await db.collection('civilians').add({
+                            firstName: parts[0],
+                            lastName: parts[1],
+                            dob: "01.01.1990", // Placeholder
+                            height: 180,
+                            tags: ["Beamter"],
+                            internalAffairs: "",
+                            img: "https://via.placeholder.com/150",
+                            createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                        });
+                    }
+                }
+
+                alert("Mitarbeiter registriert!");
+                bootstrap.Modal.getInstance(document.getElementById('registerUserModal')).hide();
+                loadEmployeeArea(); // Refresh List
+
+            } catch(e) {
+                alert("Fehler: " + e.message);
+            }
+        }
+
+        // ==========================================
+        // EXPORT PDF
+        // ==========================================
+        function exportToPDF() {
+            window.print(); // Simple Browser Print to PDF
+        }
+
+    </script>
+</body>
+</html>
