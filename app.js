@@ -333,14 +333,19 @@ async function searchVehicle() {
     const div = document.getElementById('vehicle-results');
     
     if (!input || !div) return;
-    const term = input.value.trim().toUpperCase(); // Kennzeichen sind immer Groß
+    const term = input.value.trim().toUpperCase();
 
     if (term.length === 0) {
         div.innerHTML = "<p class='text-slate-500 col-span-3 text-center'>Kennzeichen eingeben...</p>";
         return;
     }
 
-    const snapshot = await db.collection('vehicles').where('plate', '>=', term).where('plate', '<=', term + '\uf8ff').limit(10).get();
+    // Abfrage
+    const snapshot = await db.collection('vehicles')
+        .where('plate', '>=', term)
+        .where('plate', '<=', term + '\uf8ff')
+        .limit(10).get();
+        
     div.innerHTML = "";
     
     if (snapshot.empty) {
@@ -348,10 +353,13 @@ async function searchVehicle() {
         return;
     }
 
+    // HIER WAR DER FEHLER WAHRSCHEINLICH:
+    // Es muss "async doc =>" heißen, weil wir drinnen "await" nutzen!
     snapshot.forEach(async doc => {
         const v = doc.data();
-        // Besitzer Name laden (optional, aber schick)
         let ownerName = "Unbekannt";
+        
+        // Weil wir hier auf die Datenbank warten (await), muss die Schleife async sein
         if(v.ownerId) {
             const oDoc = await db.collection('persons').doc(v.ownerId).get();
             if(oDoc.exists) ownerName = `${oDoc.data().firstname} ${oDoc.data().lastname}`;
@@ -364,7 +372,7 @@ async function searchVehicle() {
                     <span class="text-xs text-slate-400">${v.model || 'Fahrzeug'}</span>
                 </div>
                 <p class="text-xs text-slate-300">Farbe: <span class="text-white">${v.color}</span></p>
-                <p class="text-xs text-blue-400 mt-2 font-bold cursor-pointer hover:underline" onclick="showPage('persons'); setTimeout(() => {document.getElementById('search-person-input').value='${ownerName.split(' ')[1]}'; searchPerson()}, 500)">
+                <p class="text-xs text-blue-400 mt-2 font-bold cursor-pointer hover:underline" onclick="showPage('persons'); setTimeout(() => {document.getElementById('search-person-input').value='${ownerName.split(' ')[1] || ''}'; searchPerson()}, 500)">
                     👤 ${ownerName}
                 </p>
             </div>`;
