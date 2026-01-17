@@ -124,39 +124,72 @@
 
         <div class="flex-1 overflow-y-auto p-8 relative">
             
-            <section id="page-home" class="page">
-                <h2 class="text-2xl font-bold mb-6 flex items-center">Dashboard <span class="ml-auto text-xs font-normal text-slate-500">Overview</span></h2>
-                
-                <div class="grid grid-cols-4 gap-4 mb-8">
-                    <div class="glass-panel p-4 rounded flex items-center justify-between border-l-2 border-red-500">
-                        <div>
-                            <p class="text-[10px] text-slate-400 uppercase">Aktive Wanteds</p>
-                            <p class="text-2xl font-bold font-mono text-white" id="stat-wanted-count">-</p>
-                        </div>
-                        <span class="text-2xl opacity-50">🚨</span>
-                    </div>
-                    <div class="glass-panel p-4 rounded flex items-center justify-between border-l-2 border-[var(--accent-color)]">
-                        <div>
-                            <p class="text-[10px] text-slate-400 uppercase">Meine Berichte</p>
-                            <p class="text-2xl font-bold font-mono text-white" id="stat-report-count">-</p>
-                        </div>
-                        <span class="text-2xl opacity-50">📄</span>
-                    </div>
-                    </div>
+          <section id="page-home" class="page hidden h-full flex flex-col">
+    <div class="mb-6 flex justify-between items-end border-b border-slate-700 pb-4">
+        <div>
+            <h2 class="text-3xl font-bold text-white">Dashboard</h2>
+            <p class="text-slate-400 text-sm mt-1">Willkommen zurück, <span class="text-blue-400 font-bold" id="dash-user-name">Officer</span>.</p>
+        </div>
+        <div class="text-right">
+            <div class="text-xs text-slate-500 uppercase font-bold">System Status</div>
+            <div class="text-green-500 font-mono font-bold animate-pulse">● ONLINE & VERBUNDEN</div>
+        </div>
+    </div>
 
-                <div class="glass-panel rounded overflow-hidden">
-                    <div class="p-4 border-b border-slate-700 flex justify-between items-center bg-red-900/10">
-                        <h3 class="font-bold text-red-500 flex items-center"><span class="animate-pulse w-2 h-2 rounded-full bg-red-500 mr-2"></span> LIVE FAHNDUNG</h3>
-                    </div>
-                    <table class="w-full text-left text-xs">
-                        <thead class="bg-slate-900 text-slate-500 uppercase font-bold">
-                            <tr><th class="p-4">Name / Alias</th><th>Grund</th><th>Ausgestellt am</th><th class="text-right p-4">Akte</th></tr>
-                        </thead>
-                        <tbody id="wanted-list-body" class="divide-y divide-slate-800">
-                            </tbody>
-                    </table>
+    <div class="flex gap-6 h-full overflow-hidden">
+        
+        <div class="w-2/3 flex flex-col gap-4">
+            <div class="flex justify-between items-center">
+                <h3 class="text-xl font-bold text-white flex items-center gap-2">
+                    📢 Aktuelle Fahndungen (BOLO)
+                </h3>
+                <span class="text-xs text-slate-500 bg-slate-900 px-2 py-1 rounded border border-slate-700">Live-Feed</span>
+            </div>
+
+            <div id="bolo-list" class="flex-1 overflow-y-auto space-y-3 pr-2 pb-4">
+                <div class="text-center text-slate-500 mt-10">Lade Meldungen...</div>
+            </div>
+        </div>
+
+        <div class="w-1/3 flex flex-col gap-4">
+            
+            <div class="glass-panel p-4 rounded border border-blue-500/30 bg-slate-800/50">
+                <h4 class="font-bold text-blue-400 mb-3 text-sm uppercase">Neue Meldung verfassen</h4>
+                
+                <input id="bolo-title" type="text" placeholder="Betreff (z.B. Grüner Sultan flüchtig)" 
+                       class="input-field w-full p-2 mb-2 rounded text-sm font-bold">
+                
+                <textarea id="bolo-content" rows="3" placeholder="Details (Kennzeichen, Richtung, Bewaffnung...)" 
+                          class="input-field w-full p-2 mb-3 rounded text-sm text-slate-300"></textarea>
+                
+                <div class="flex justify-between items-center">
+                    <select id="bolo-priority" class="bg-slate-900 border border-slate-600 text-white text-xs p-2 rounded">
+                        <option value="normal">Info (Blau)</option>
+                        <option value="high">GEFAHR (Rot)</option>
+                        <option value="warn">Warnung (Gelb)</option>
+                    </select>
+                    <button onclick="saveBOLO()" class="bg-blue-600 hover:bg-blue-500 text-white px-4 py-1.5 rounded text-sm font-bold shadow-lg transition">
+                        SENDEN 📡
+                    </button>
                 </div>
-            </section>
+            </div>
+
+            <div class="glass-panel p-4 rounded mt-auto mb-4">
+                <h4 class="text-slate-500 text-xs font-bold uppercase mb-2">Schnellzugriff</h4>
+                <div class="grid grid-cols-2 gap-2 text-center">
+                    <div class="bg-slate-700/50 p-2 rounded cursor-pointer hover:bg-slate-600 transition" onclick="showPage('persons')">
+                        <div class="text-xl">👥</div>
+                        <div class="text-[10px] text-slate-300">Personen</div>
+                    </div>
+                    <div class="bg-slate-700/50 p-2 rounded cursor-pointer hover:bg-slate-600 transition" onclick="showPage('vehicles')">
+                        <div class="text-xl">🚔</div>
+                        <div class="text-[10px] text-slate-300">Fahrzeuge</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
 
             <section id="page-persons" class="page hidden">
                 <div class="flex justify-between items-center mb-6">
