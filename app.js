@@ -270,7 +270,7 @@ async function liveSearchOwner(query) {
     dropdown.innerHTML = "";
     dropdown.classList.remove('hidden');
     
-    snapshot.forEach(doc => {
+    snapshot.forEach(async doc => {
         const p = doc.data();
         const div = document.createElement('div');
         div.className = "p-2 hover:bg-slate-700 cursor-pointer border-b border-slate-700 text-xs";
