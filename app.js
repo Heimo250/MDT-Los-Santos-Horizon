@@ -328,7 +328,7 @@ async function saveVehicle() {
     closeModal();
 }
 
-aasync function searchVehicle() {
+async function searchVehicle() {
     const input = document.getElementById('search-vehicle-input');
     const div = document.getElementById('vehicle-results');
     
