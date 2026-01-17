@@ -676,4 +676,62 @@ async function updateMyStatus(newStatus) {
     }
 }
 
+function initDispatchMonitor() {
+    // Alten Listener stoppen, falls vorhanden
+    if(dispatchUnsubscribe) dispatchUnsubscribe();
+
+    const listLSPD = document.getElementById('dispatch-list-lspd');
+    const listLSMS = document.getElementById('dispatch-list-lsms');
+    
+    // Sicherheits-Check: Sind wir auf der richtigen Seite?
+    if(!listLSPD || !listLSMS) return; 
+
+    dispatchUnsubscribe = db.collection('users').onSnapshot(snapshot => {
+        // Listen leeren
+        listLSPD.innerHTML = "";
+        listLSMS.innerHTML = "";
+        
+        let cLSPD = 0;
+        let cLSMS = 0;
+
+        snapshot.forEach(doc => {
+            const u = doc.data();
+            
+            // HIER IST DER FIX: Wir nutzen die ID des Dokuments als Namen
+            const unitName = doc.id; 
+
+            // Nur anzeigen, wer einen Status hat UND nicht '10-7' ist
+            if (!u.status || u.status === '10-7') return;
+
+            // Farbe bestimmen
+            let colorClass = "text-green-500 border-green-500/30 bg-green-900/10";
+            if(u.status === '10-6') colorClass = "text-yellow-500 border-yellow-500/30 bg-yellow-900/10";
+
+            // HTML GENERIEREN (Ohne Rang!)
+            const html = `
+                <div class="flex justify-between items-center p-3 rounded border border-slate-700 bg-slate-800 mb-2 animate-fadeIn shadow-sm">
+                    <div class="font-bold text-white text-sm pl-2">
+                        ${unitName}
+                    </div>
+                    <div class="px-3 py-1 rounded text-xs font-mono font-bold border ${colorClass}">
+                        ${u.status}
+                    </div>
+                </div>`;
+
+            // Sortierung: LSPD oder MARSHAL
+            if (u.department === 'MARSHAL' || u.department === 'LSMS' || (u.department && u.department.includes('Marshal'))) {
+                listLSMS.innerHTML += html; 
+                cLSMS++;
+            } else {
+                listLSPD.innerHTML += html; 
+                cLSPD++;
+            }
+        });
+        
+        // Zähler oben in der Box aktualisieren
+        if(document.getElementById('count-lspd')) document.getElementById('count-lspd').innerText = cLSPD;
+        if(document.getElementById('count-lsms')) document.getElementById('count-lsms').innerText = cLSMS;
+    });
+}
+
 console.log("SYSTEM GELADEN: ENDE");
