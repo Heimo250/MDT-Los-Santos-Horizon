@@ -180,16 +180,20 @@ async function savePerson() {
 async function viewProfile(personId) {
     const modal = document.getElementById('modal-person');
     if(modal) modal.classList.remove('hidden');
+    
+    // Daten laden
     const doc = await db.collection('persons').doc(personId).get();
     if (!doc.exists) return;
     const p = doc.data();
     
+    // Stammdaten füllen
     document.getElementById('p-id-display').innerText = "ID: " + doc.id;
     document.getElementById('p-firstname').value = p.firstname;
     document.getElementById('p-lastname').value = p.lastname;
     document.getElementById('p-dob').value = p.dob;
     document.getElementById('p-height').value = p.height;
     
+    // Tags setzen
     selectedTags = p.tags || []; 
     document.querySelectorAll('.tag-btn').forEach(btn => {
         const tag = btn.getAttribute('data-tag');
@@ -200,6 +204,7 @@ async function viewProfile(personId) {
         }
     });
 
+    // FAHRZEUGE LADEN
     const vList = document.getElementById('p-vehicle-list');
     if(vList) {
         vList.innerHTML = "<span class='text-xs text-slate-500 animate-pulse'>Suche...</span>";
@@ -212,13 +217,14 @@ async function viewProfile(personId) {
         });
     }
 
-  const rList = document.getElementById('p-report-list');
+    // AKTEN & BERICHTE LADEN (HIER WAR DAS PROBLEM)
+    const rList = document.getElementById('p-report-list');
     if(rList) {
         rList.innerHTML = "<span class='text-xs text-slate-500 animate-pulse'>Lade Akten...</span>";
         try {
             rList.innerHTML = "";
             
-            // 1. STRAFAKTEN (ROT)
+            // --- 1. STRAFAKTEN (ROT) ---
             const crSnap = await db.collection('criminal_records')
                                    .where('suspectId', '==', doc.id)
                                    .orderBy('timestamp', 'desc').get();
@@ -227,9 +233,10 @@ async function viewProfile(personId) {
                 rList.innerHTML += "<div class='text-[10px] text-red-500 font-bold mb-1 mt-1 border-b border-red-900/30 pb-1'>STRAFAKTEN</div>";
                 crSnap.forEach(rDoc => {
                     const r = rDoc.data();
-                    // HIER IST DIE ÄNDERUNG: Wir nutzen openFullRecord und encodeURIComponent
-                    const safeContent = encodeURIComponent(r.content); 
+                    // Text sicher verpacken für den Funktionsaufruf
+                    const safeContent = encodeURIComponent(r.content || ""); 
                     
+                    // WICHTIG: Hier steht jetzt openFullRecord statt alert!
                     rList.innerHTML += `
                         <div class="bg-red-900/10 p-3 rounded border-l-2 border-red-600 mb-2 cursor-pointer hover:bg-red-900/30 transition group" 
                              onclick="openFullRecord('${r.title}', '${r.date}', '${r.officer}', '${safeContent}')">
@@ -242,7 +249,7 @@ async function viewProfile(personId) {
                 });
             }
 
-            // 2. BERICHTE (BLAU)
+            // --- 2. BERICHTE (BLAU) ---
             const rSnap = await db.collection('reports').orderBy('timestamp', 'desc').limit(50).get();
             let found = false;
             let reportHTML = "";
@@ -251,7 +258,9 @@ async function viewProfile(personId) {
                 const r = rDoc.data();
                 // Prüfen ob Name vorkommt
                 if ((r.subject && r.subject.includes(p.lastname)) || (r.content && r.content.includes(p.lastname))) {
-                    const safeContent = encodeURIComponent(r.content);
+                    const safeContent = encodeURIComponent(r.content || "");
+                    
+                    // WICHTIG: Auch hier openFullRecord!
                     reportHTML += `
                         <div class="bg-blue-900/10 p-2 rounded border-l-2 border-blue-500 mb-1 cursor-pointer hover:bg-blue-900/30 transition" 
                              onclick="openFullRecord('${r.subject}', '${r.timestamp ? r.timestamp.toDate().toLocaleDateString() : ''}', '${r.author}', '${safeContent}')">
