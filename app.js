@@ -632,10 +632,11 @@ async function saveIACase() {
 // 10. AKTENEINTRÄGE (CRIMINAL RECORDS)
 // ==========================================
 
-// A. Die Suchfunktion (Kopie von Vehicle Search, angepasst)
+// A. SUCHE
 async function liveSearchSuspectRecord(query) {
     const dropdown = document.getElementById('record-suspect-dropdown');
     
+    // UI Check
     if (!query || query.length < 2) {
         dropdown.classList.add('hidden');
         return;
@@ -649,16 +650,18 @@ async function liveSearchSuspectRecord(query) {
         
         dropdown.innerHTML = "";
         dropdown.classList.remove('hidden');
+        // WICHTIG: Z-Index erzwingen, damit es über dem Fenster liegt
+        dropdown.style.zIndex = "9999"; 
         
         if (snapshot.empty) {
-            dropdown.innerHTML = "<div class='p-3 text-xs text-slate-500'>Keine Person gefunden</div>";
+            dropdown.innerHTML = "<div class='p-3 text-xs text-slate-500'>Keine Person gefunden.</div>";
             return;
         }
 
         snapshot.forEach(doc => {
             const p = doc.data();
             const div = document.createElement('div');
-            div.className = "p-3 hover:bg-blue-600 cursor-pointer border-b border-slate-700 text-sm bg-slate-800 text-white font-bold flex justify-between";
+            div.className = "p-3 hover:bg-blue-600 cursor-pointer border-b border-slate-700 text-sm bg-slate-900 text-white font-bold flex justify-between";
             div.innerHTML = `<span>${p.firstname} ${p.lastname}</span> <span class="text-slate-400 font-mono text-xs">${p.dob}</span>`;
             
             div.onclick = () => {
@@ -669,61 +672,51 @@ async function liveSearchSuspectRecord(query) {
     } catch (e) { console.error(e); }
 }
 
-// B. Auswahl & Vorlage laden
+// B. AUSWAHL
 function selectSuspectForRecord(id, name) {
-    // 1. UI Umschalten
     document.getElementById('record-suspect-dropdown').classList.add('hidden');
     document.getElementById('record-step-1').classList.add('hidden');
     document.getElementById('record-step-2').classList.remove('hidden');
 
-    // 2. Daten setzen
     document.getElementById('record-suspect-name').innerText = name;
     document.getElementById('record-suspect-id').value = id;
-    document.getElementById('record-signature').innerText = currentUser.username; // Auto-Unterschrift
+    document.getElementById('record-signature').innerText = currentUser.username;
     
-    // Aktuelles Datum setzen
+    // Zeit setzen
     const now = new Date();
-    const dateStr = now.toLocaleDateString('de-DE');
-    const timeStr = now.toLocaleTimeString('de-DE', {hour: '2-digit', minute:'2-digit'});
-    
-    // ISO String für das Input-Feld (etwas tricky in JS)
     const isoString = new Date(now.getTime() - (now.getTimezoneOffset() * 60000)).toISOString().slice(0,16);
     document.getElementById('record-time').value = isoString;
+    const dateStr = now.toLocaleDateString('de-DE');
+    const timeStr = now.toLocaleTimeString('de-DE', {hour: '2-digit', minute:'2-digit'});
 
-    // 3. VORLAGE EINFÜGEN
+    // Vorlage
     const template = `TATORT, DATUM UND UHRZEIT:
 PLZ ____, am ${dateStr} um ${timeStr} Uhr
 
-BESCHLAGNAHMTE GEGENSTÄNDE (Was wurde abgenommen?):
+BESCHLAGNAHMTE GEGENSTÄNDE:
 - 
 
 SACHVERHALT:
-Was ist passiert? (So kurz wie möglich, so informativ wie nötig):
+Was ist passiert?:
 
 
-WER WAR DABEI (z.B. USMS, SMC etc.):
-
-
-FESTNEHMENDER BEAMTER (DN + Name):
-${currentUser.username}
-
-BETEILIGTE BEAMTE (DN + Name):
+BETEILIGTE BEAMTE:
 - 
 
-ZEUGEN (Name, ggf. Telefonnummer):
+ZEUGEN:
 /
 
-RECHTE VERLESEN (DN + Name):
-Die Mirandawarnung wurde durch ${currentUser.username} am ${dateStr} um ${timeStr} Uhr verlesen.
+RECHTE VERLESEN:
+Durch ${currentUser.username} am ${dateStr} um ${timeStr} Uhr.
 
 VERMERKE:
-[ ] Kooperatives Verhalten
-[ ] Nicht Kooperatives Verhalten`;
+[ ] Kooperativ
+[ ] Nicht Kooperativ`;
 
     document.getElementById('record-content').value = template;
 }
 
-// C. Reset Funktion (Zurück zur Suche)
+// C. RESET
 function resetRecordForm() {
     document.getElementById('record-step-2').classList.add('hidden');
     document.getElementById('record-step-1').classList.remove('hidden');
@@ -731,7 +724,7 @@ function resetRecordForm() {
     document.getElementById('record-title').value = "";
 }
 
-// D. Speichern
+// D. SPEICHERN
 async function saveCriminalRecord() {
     const suspectId = document.getElementById('record-suspect-id').value;
     const suspectName = document.getElementById('record-suspect-name').innerText;
@@ -739,29 +732,23 @@ async function saveCriminalRecord() {
     const content = document.getElementById('record-content').value;
     const timeVal = document.getElementById('record-time').value;
 
-    if (!title || content.length < 20) return alert("Bitte Titel und Sachverhalt ausfüllen.");
+    if (!title || content.length < 10) return alert("Bitte ausfüllen.");
 
-    // Wir speichern es in einer neuen Collection 'criminal_records'
-    // UND wir speichern den Author mit, für die Signatur
     try {
         await db.collection('criminal_records').add({
-            suspectId: suspectId,      // Verknüpfung zur Person!
-            suspectName: suspectName,  // Backup Name
-            title: title,
-            content: content,
+            suspectId, suspectName, title, content,
             date: timeVal,
-            officer: currentUser.username, // Signatur
+            officer: currentUser.username, 
             officerRank: currentUser.rank,
             department: currentUser.department,
             timestamp: firebase.firestore.FieldValue.serverTimestamp()
         });
 
-        alert("Akte erfolgreich angelegt und signiert.");
+        alert("Akte angelegt.");
         resetRecordForm();
     } catch (e) {
-        console.error(e);
-        alert("Fehler beim Speichern: " + e.message);
+        alert("Fehler: " + e.message);
     }
 }
-
+    
 console.log("APP JS ENDE ERREICHT");
