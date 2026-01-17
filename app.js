@@ -37,6 +37,7 @@ async function handleLogin() {
             applyTheme(currentUser.department);
             checkPermissions();
             startWantedListener();
+            initDashboard();
             showPage('home');
         } else { alert("Falsche Daten."); }
     } catch (e) { alert("Login Fehler: " + e.message); }
@@ -80,7 +81,8 @@ function showPage(pageId) {
     if (target) target.classList.remove('hidden');
     const nav = document.getElementById('nav-' + pageId);
     if (nav) nav.classList.add('active');
-
+    
+    if (pageId === 'home') initDashboard();
     if (pageId === 'reports') loadReports();
     if (pageId === 'employees') renderEmployeePanel();
     if (pageId === 'calculator') loadLaws();
@@ -532,6 +534,102 @@ async function saveCriminalRecord() {
         alert("Akte angelegt.");
         resetRecordForm();
     } catch (e) { alert("Fehler: " + e.message); }
+}
+
+// ==========================================
+// 11. DASHBOARD / BOLO SYSTEM (LIVE)
+// ==========================================
+
+// Wird beim Starten aufgerufen, um den Live-Listener zu aktivieren
+let boloUnsubscribe = null;
+
+function initDashboard() {
+    // Falls schon ein Listener läuft, stoppen (verhindert doppelte Einträge)
+    if(boloUnsubscribe) boloUnsubscribe();
+
+    const list = document.getElementById('bolo-list');
+    if(!list) return;
+
+    // UI Update Name
+    if(currentUser) document.getElementById('dash-user-name').innerText = currentUser.username;
+
+    // LIVE VERBINDUNG zur Datenbank
+    boloUnsubscribe = db.collection('bolos').orderBy('timestamp', 'desc').limit(20)
+        .onSnapshot(snapshot => {
+            list.innerHTML = "";
+            
+            if(snapshot.empty) {
+                list.innerHTML = "<div class='text-center text-slate-600 py-10 italic'>Keine aktiven Meldungen. Ruhige Schicht! ☕</div>";
+                return;
+            }
+
+            snapshot.forEach(doc => {
+                const b = doc.data();
+                
+                // Farben je nach Priorität
+                let borderClass = "border-blue-500";
+                let bgClass = "bg-slate-800/50";
+                let icon = "ℹ️";
+                
+                if (b.priority === 'high') {
+                    borderClass = "border-red-600";
+                    bgClass = "bg-red-900/20";
+                    icon = "🚨";
+                } else if (b.priority === 'warn') {
+                    borderClass = "border-yellow-500";
+                    bgClass = "bg-yellow-900/10";
+                    icon = "⚠️";
+                }
+
+                // Lösch-Button nur für den Ersteller oder Command
+                const canDelete = (currentUser.username === b.author || currentUser.rank.includes('Command') || currentUser.rank === 'Attorney General');
+                const deleteBtn = canDelete ? `<button onclick="deleteBOLO('${doc.id}')" class="text-slate-500 hover:text-red-500 ml-3" title="Löschen">✕</button>` : '';
+
+                const time = b.timestamp ? b.timestamp.toDate().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '';
+
+                list.innerHTML += `
+                    <div class="glass-panel p-3 rounded border-l-4 ${borderClass} ${bgClass} flex gap-3 relative animate-fadeIn">
+                        <div class="text-2xl pt-1">${icon}</div>
+                        <div class="flex-1">
+                            <div class="flex justify-between items-start">
+                                <h4 class="font-bold text-slate-200 text-sm">${b.title}</h4>
+                                <div class="flex items-center">
+                                    <span class="text-[10px] font-mono text-slate-400 mr-2">${time} Uhr</span>
+                                    ${deleteBtn}
+                                </div>
+                            </div>
+                            <p class="text-xs text-slate-300 mt-1 whitespace-pre-wrap">${b.content}</p>
+                            <p class="text-[10px] text-slate-500 mt-2 text-right">Meldung von: ${b.author}</p>
+                        </div>
+                    </div>`;
+            });
+        });
+}
+
+async function saveBOLO() {
+    const title = document.getElementById('bolo-title').value;
+    const content = document.getElementById('bolo-content').value;
+    const priority = document.getElementById('bolo-priority').value;
+
+    if(!title || !content) return alert("Bitte Betreff und Text eingeben.");
+
+    try {
+        await db.collection('bolos').add({
+            title, content, priority,
+            author: currentUser.username,
+            timestamp: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        
+        // Felder leeren
+        document.getElementById('bolo-title').value = "";
+        document.getElementById('bolo-content').value = "";
+    } catch(e) { console.error(e); }
+}
+
+async function deleteBOLO(id) {
+    if(confirm("Diese Meldung löschen?")) {
+        await db.collection('bolos').doc(id).delete();
+    }
 }
 
 console.log("SYSTEM GELADEN: ENDE");
