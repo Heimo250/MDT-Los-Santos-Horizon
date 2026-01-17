@@ -71,6 +71,9 @@
             <button onclick="showPage('home')" id="nav-home" class="nav-item w-full p-3 lg:px-6 text-slate-400 hover:text-white hover:bg-slate-800 flex items-center justify-center lg:justify-start transition-all">
                 <span class="text-lg w-6 text-center">🏠</span> <span class="hidden lg:block ml-3 font-semibold">Dashboard</span>
             </button>
+            <button onclick="showPage('dispatch')" id="nav-dispatch" class="nav-item w-full p-3 lg:px-6 text-slate-400 hover:text-white hover:bg-slate-800 flex items-center justify-center lg:justify-start transition-all">
+    <span class="text-lg w-6 text-center">📡</span> <span class="hidden lg:block ml-3 font-semibold">Leitstelle</span>
+        </button>
             <button onclick="showPage('persons')" id="nav-persons" class="nav-item w-full p-3 lg:px-6 text-slate-400 hover:text-white hover:bg-slate-800 flex items-center justify-center lg:justify-start transition-all">
                 <span class="text-lg w-6 text-center">👤</span> <span class="hidden lg:block ml-3 font-semibold">Zivilregister</span>
             </button>
@@ -206,6 +209,37 @@
     </div>
 </section>
 
+            <section id="page-dispatch" class="page hidden h-full flex flex-col">
+    <div class="mb-6 border-b border-slate-700 pb-4">
+        <h2 class="text-2xl font-bold text-white">📡 Aktive Einheiten (Live-Status)</h2>
+        <p class="text-slate-400 text-sm">Übersicht aller angemeldeten Kräfte.</p>
+    </div>
+
+    <div class="flex gap-6 h-full overflow-hidden">
+        
+        <div class="w-1/2 flex flex-col bg-slate-900/50 rounded-lg border border-blue-900/50 overflow-hidden">
+            <div class="bg-blue-900/30 p-3 border-b border-blue-900 flex justify-between items-center">
+                <h3 class="font-bold text-blue-400 flex items-center gap-2">🚓 LSPD Einheiten</h3>
+                <span id="count-lspd" class="text-xs bg-blue-900 text-white px-2 rounded-full">0</span>
+            </div>
+            <div id="dispatch-list-lspd" class="flex-1 overflow-y-auto p-2 space-y-2">
+                <p class="text-center text-slate-600 mt-10 text-xs">Keine Einheiten im Dienst.</p>
+            </div>
+        </div>
+
+        <div class="w-1/2 flex flex-col bg-slate-900/50 rounded-lg border border-amber-900/50 overflow-hidden">
+            <div class="bg-amber-900/30 p-3 border-b border-amber-900 flex justify-between items-center">
+                <h3 class="font-bold text-amber-500 flex items-center gap-2">⭐ Marshal Service</h3>
+                <span id="count-lsms" class="text-xs bg-amber-900 text-white px-2 rounded-full">0</span>
+            </div>
+            <div id="dispatch-list-lsms" class="flex-1 overflow-y-auto p-2 space-y-2">
+                <p class="text-center text-slate-600 mt-10 text-xs">Keine Marshals im Dienst.</p>
+            </div>
+        </div>
+
+    </div>
+</section>
+            
             <section id="page-persons" class="page hidden">
                 <div class="flex justify-between items-center mb-6">
                     <h2 class="text-2xl font-bold">Zivilregister</h2>
