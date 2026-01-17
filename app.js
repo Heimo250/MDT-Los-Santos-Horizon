@@ -648,11 +648,15 @@ async function deleteBOLO(id) {
 // 12. STATUS & LEITSTELLE (DISPATCH)
 // ==========================================
 
-// A. Meinen eigenen Status ändern
+// A. Meinen eigenen Status ändern (FIXED)
 async function updateMyStatus(newStatus) {
-    if(!currentUser) return;
+    // Sicherheits-Check: Ist überhaupt wer eingeloggt?
+    if(!currentUser || !currentUser.username) {
+        console.warn("Status-Update blockiert: Nicht eingeloggt.");
+        return;
+    }
 
-    // UI Update (Punkt-Farbe ändern)
+    // UI Update (Punkt-Farbe sofort ändern für Feedback)
     const indicator = document.getElementById('status-indicator');
     if(indicator) {
         if(newStatus === '10-8') indicator.className = "h-2 w-2 rounded-full bg-green-500 shadow-[0_0_10px_#22c55e]";
@@ -660,64 +664,16 @@ async function updateMyStatus(newStatus) {
         else indicator.className = "h-2 w-2 rounded-full bg-red-500";
     }
 
-    // Datenbank Update
+    // Datenbank Update (Mit .set statt .update um 400er Fehler zu vermeiden)
     try {
-        await db.collection('users').doc(currentUser.username).update({
+        await db.collection('users').doc(currentUser.username).set({
             status: newStatus,
             lastStatusChange: firebase.firestore.FieldValue.serverTimestamp()
-        });
-    } catch(e) { console.error("Status Update Fehler:", e); }
-}
-
-// B. Live-Monitor für die Leitstelle
-let dispatchUnsubscribe = null;
-
-function initDispatchMonitor() {
-    if(dispatchUnsubscribe) dispatchUnsubscribe();
-
-    const listLSPD = document.getElementById('dispatch-list-lspd');
-    const listLSMS = document.getElementById('dispatch-list-lsms');
-    if(!listLSPD || !listLSMS) return; 
-
-    dispatchUnsubscribe = db.collection('users').onSnapshot(snapshot => {
-        listLSPD.innerHTML = "";
-        listLSMS.innerHTML = "";
-        let cLSPD = 0, cLSMS = 0;
-
-        snapshot.forEach(doc => {
-            const u = doc.data();
-            
-            // FIX 1: Der Name ist die ID des Dokuments!
-            const unitName = doc.id; 
-
-            // Nur anzeigen, wer nicht 10-7 (Offline) ist
-            if (!u.status || u.status === '10-7') return;
-
-            let color = "text-green-500 border-green-500/30 bg-green-900/10";
-            if(u.status === '10-6') color = "text-yellow-500 border-yellow-500/30 bg-yellow-900/10";
-
-            // FIX 2: Rang entfernt, Name korrigiert
-            const html = `
-                <div class="flex justify-between items-center p-2 rounded border border-slate-700 bg-slate-800 mb-1 animate-fadeIn">
-                    <div class="font-bold text-white text-xs pl-2">
-                        ${unitName}
-                    </div>
-                    <div class="px-2 py-0.5 rounded text-[10px] font-bold border ${color}">
-                        ${u.status}
-                    </div>
-                </div>`;
-
-            // Trennung Marshals vs LSPD
-            if (u.department === 'MARSHAL' || u.department === 'LSMS' || (u.department && u.department.includes('Marshal'))) {
-                listLSMS.innerHTML += html; cLSMS++;
-            } else {
-                listLSPD.innerHTML += html; cLSPD++;
-            }
-        });
-        
-        if(document.getElementById('count-lspd')) document.getElementById('count-lspd').innerText = cLSPD;
-        if(document.getElementById('count-lsms')) document.getElementById('count-lsms').innerText = cLSMS;
-    });
+        }, { merge: true }); // <--- WICHTIG: merge: true verhindert, dass wir andere Daten überschreiben
+    } catch(e) { 
+        console.error("Status Update Fehler:", e); 
+        alert("Fehler beim Status setzen: " + e.message);
+    }
 }
 
 console.log("SYSTEM GELADEN: ENDE");
