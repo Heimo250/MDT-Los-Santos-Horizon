@@ -270,7 +270,7 @@ async function liveSearchOwner(query) {
     dropdown.innerHTML = "";
     dropdown.classList.remove('hidden');
     
-    snapshot.forEach(async doc => {
+    snapshot.forEach(doc => {
         const p = doc.data();
         const div = document.createElement('div');
         div.className = "p-2 hover:bg-slate-700 cursor-pointer border-b border-slate-700 text-xs";
@@ -302,9 +302,12 @@ async function saveVehicle() {
 async function searchVehicle() {
     const input = document.getElementById('search-vehicle-input');
     const div = document.getElementById('vehicle-results');
-    if (!input || !div) return;
     
+    // Safety Check: Sind die Elemente da?
+    if (!input || !div) return;
+
     const term = input.value.trim().toUpperCase();
+
     if (term.length === 0) {
         div.innerHTML = "<p class='text-slate-500 col-span-3 text-center'>Kennzeichen eingeben...</p>";
         return;
@@ -323,18 +326,19 @@ async function searchVehicle() {
             return;
         }
 
-        // WICHTIG: async im Loop, damit await funktioniert
-        snapshot.forEach(async doc => {
+        // HIER WAR DER FEHLER: Das Wort 'async' fehlte vor 'doc'
+        // Richtig: snapshot.forEach(async doc => {
+        const promises = snapshot.docs.map(async doc => {
             const v = doc.data();
             let ownerName = "Unbekannt";
             
             if(v.ownerId) {
-                // Hier war früher oft der Fehler, wenn async fehlte
+                // Wir warten auf die Datenbank, daher muss die Funktion async sein
                 const oDoc = await db.collection('persons').doc(v.ownerId).get();
                 if(oDoc.exists) ownerName = `${oDoc.data().firstname} ${oDoc.data().lastname}`;
             }
 
-            div.innerHTML += `
+            return `
                 <div class="glass-panel p-4 rounded border-l-4 border-yellow-500 hover:bg-slate-800 transition">
                     <div class="flex justify-between items-center mb-2">
                         <span class="bg-yellow-500 text-black font-bold px-2 py-0.5 rounded text-sm font-mono">${v.plate}</span>
@@ -346,7 +350,15 @@ async function searchVehicle() {
                     </p>
                 </div>`;
         });
-    } catch (e) { console.error(e); }
+
+        // Alle Ergebnisse abwarten und dann anzeigen
+        const htmlParts = await Promise.all(promises);
+        div.innerHTML = htmlParts.join('');
+
+    } catch (e) { 
+        console.error(e);
+        div.innerHTML = "<p class='text-red-500'>Fehler beim Laden.</p>";
+    }
 }
 
 // ==========================================
