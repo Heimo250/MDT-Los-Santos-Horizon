@@ -1,6 +1,8 @@
-console.log("SYSTEM STARTET...");
+console.log("SYSTEM STARTET... LADE MODULE");
 
-// --- 1. CONFIG ---
+// ==========================================
+// 1. CONFIG & SETUP
+// ==========================================
 const firebaseConfig = {
     apiKey: "AIzaSyD6I01je_MrT7KzeFE7BD1IGc4amukK_6Q",
     authDomain: "mdt-system-c18ea.firebaseapp.com",
@@ -17,7 +19,9 @@ let currentUser = null;
 let selectedTags = [];
 let currentReportFilter = 'ALL';
 
-// --- 2. LOGIN ---
+// ==========================================
+// 2. LOGIN & THEME
+// ==========================================
 async function handleLogin() {
     const userVal = document.getElementById('login-user').value.trim();
     const passVal = document.getElementById('login-pass').value;
@@ -80,7 +84,9 @@ function checkPermissions() {
         document.querySelectorAll('.ia-only').forEach(el => el.classList.remove('hidden'));
 }
 
-// --- 3. UI ---
+// ==========================================
+// 3. UI NAVIGATION
+// ==========================================
 function showPage(pageId) {
     document.querySelectorAll('.page').forEach(p => p.classList.add('hidden'));
     document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
@@ -110,7 +116,9 @@ function closeModal() {
     document.querySelectorAll('input, textarea').forEach(i => i.value = '');
 }
 
-// --- 4. PERSONEN ---
+// ==========================================
+// 4. PERSONEN (CIVIL REGISTRY)
+// ==========================================
 function toggleTag(btn) {
     const tag = btn.getAttribute('data-tag');
     if (selectedTags.includes(tag)) {
@@ -188,25 +196,21 @@ async function savePerson() {
     } catch (e) { alert(e.message); }
 }
 
+// === VIEW PROFILE (ERWEITERT) ===
 async function viewProfile(personId) {
     const modal = document.getElementById('modal-person');
     if(modal) modal.classList.remove('hidden');
     
-    // 1. PERSONENDATEN LADEN
     const doc = await db.collection('persons').doc(personId).get();
-    if (!doc.exists) return alert("Fehler: Akte nicht gefunden.");
-    
+    if (!doc.exists) return;
     const p = doc.data();
-    const currentLastname = p.lastname; // Für die Suche wichtig
-
-    // UI befüllen
+    
     document.getElementById('p-id-display').innerText = "ID: " + doc.id;
     document.getElementById('p-firstname').value = p.firstname;
     document.getElementById('p-lastname').value = p.lastname;
     document.getElementById('p-dob').value = p.dob;
     document.getElementById('p-height').value = p.height;
     
-    // Tags setzen
     selectedTags = p.tags || []; 
     document.querySelectorAll('.tag-btn').forEach(btn => {
         const tag = btn.getAttribute('data-tag');
@@ -217,100 +221,60 @@ async function viewProfile(personId) {
         }
     });
 
-    // 2. FAHRZEUGE LADEN (Verknüpft über ownerId)
+    // LOAD VEHICLES
     const vList = document.getElementById('p-vehicle-list');
-    vList.innerHTML = "<span class='text-xs text-slate-500 animate-pulse'>Suche Fahrzeuge...</span>";
-    
-    try {
-        const vSnap = await db.collection('vehicles').where('ownerId', '==', doc.id).get();
-        vList.innerHTML = "";
-        
-        if (vSnap.empty) {
-            vList.innerHTML = "<span class='text-xs text-slate-500'>Keine Fahrzeuge registriert.</span>";
-        } else {
-            vSnap.forEach(vDoc => {
+    if(vList) {
+        vList.innerHTML = "<span class='text-xs text-slate-500 animate-pulse'>Suche...</span>";
+        db.collection('vehicles').where('ownerId', '==', doc.id).get().then(snap => {
+            vList.innerHTML = snap.empty ? "<span class='text-xs text-slate-500'>Keine KFZ</span>" : "";
+            snap.forEach(vDoc => {
                 const v = vDoc.data();
-                vList.innerHTML += `
-                    <div class="flex justify-between items-center bg-slate-900 p-2 rounded border border-slate-700">
-                        <span class="font-mono text-yellow-500 font-bold text-xs">${v.plate}</span>
-                        <span class="text-[10px] text-slate-300">${v.model}</span>
-                    </div>`;
+                vList.innerHTML += `<div class="bg-slate-900 p-2 rounded border border-slate-700 mb-1 flex justify-between"><span class="text-yellow-500 font-bold text-xs">${v.plate}</span><span class="text-[10px] text-slate-400">${v.model}</span></div>`;
             });
-        }
-    } catch(e) { console.error("Vehicle Load Error", e); }
-
-    // 3. AKTEN & BERICHTE LADEN (Kombiniert)
-    const rList = document.getElementById('p-report-list');
-    rList.innerHTML = "<span class='text-xs text-slate-500 animate-pulse'>Lade Akten...</span>";
-
-    try {
-        rList.innerHTML = "";
-        
-        // A) Hole Strafakten (Criminal Records) - Die sind wichtiger, kommen nach oben
-        const crSnap = await db.collection('criminal_records')
-                               .where('suspectId', '==', doc.id)
-                               .orderBy('timestamp', 'desc').get();
-                               
-        if(!crSnap.empty) {
-            rList.innerHTML += "<div class='text-[10px] uppercase font-bold text-red-500 mb-1 mt-2'>Strafakten</div>";
-            crSnap.forEach(rDoc => {
-                const r = rDoc.data();
-                rList.innerHTML += `
-                    <div class="bg-red-900/20 p-2 rounded border-l-2 border-red-500 mb-2 cursor-pointer hover:bg-slate-800" onclick="alert('${r.content.replace(/\n/g, "\\n")}')">
-                        <div class="flex justify-between text-[10px] text-slate-500">
-                            <span>${r.officer}</span>
-                            <span>${r.date.replace('T', ' ')}</span>
-                        </div>
-                        <div class="text-xs font-bold text-white truncate">⚖️ ${r.title}</div>
-                    </div>`;
-            });
-        }
-
-        // B) Hole normale Berichte (Textsuche nach Nachname wie vorher)
-        const rSnap = await db.collection('reports').orderBy('timestamp', 'desc').limit(50).get();
-        let foundReport = false;
-        
-        // Kleiner Header für Berichte
-        const reportHeaderDiv = document.createElement('div');
-        reportHeaderDiv.innerHTML = "<div class='text-[10px] uppercase font-bold text-blue-500 mb-1 mt-2'>Erwähnungen in Berichten</div>";
-        let hasHeaderAppended = false;
-
-        rSnap.forEach(rDoc => {
-            const r = rDoc.data();
-            if ( (r.subject && r.subject.includes(currentLastname)) || (r.content && r.content.includes(currentLastname)) ) {
-                if(!hasHeaderAppended) { rList.appendChild(reportHeaderDiv); hasHeaderAppended = true; }
-                
-                rList.innerHTML += `
-                    <div class="bg-slate-900 p-2 rounded border-l-2 border-blue-500 mb-1 cursor-pointer hover:bg-slate-800" onclick="alert('${r.content.replace(/\n/g, "\\n")}')">
-                        <div class="flex justify-between text-[10px] text-slate-500">
-                            <span>${r.deptPrefix}</span>
-                            <span>${r.timestamp ? r.timestamp.toDate().toLocaleDateString() : 'N/A'}</span>
-                        </div>
-                        <div class="text-xs font-bold text-slate-300 truncate">📄 ${r.subject}</div>
-                    </div>`;
-                foundReport = true;
-            }
         });
-
-        if (crSnap.empty && !foundReport) {
-            rList.innerHTML = "<span class='text-xs text-slate-500'>Keine Einträge vorhanden.</span>";
-        }
-        
-    } catch(e) { console.error("History Load Error", e); }
-
-// --- 5. FAHRZEUGE ---
-async function liveSearchOwner(query) {
-    const dropdown = document.getElementById('owner-dropdown');
-    
-    // Wenn weniger als 2 Zeichen getippt: Ausblenden
-    if (!query || query.length < 2) {
-        dropdown.classList.add('hidden');
-        dropdown.innerHTML = "";
-        return;
     }
 
+    // LOAD RECORDS & REPORTS
+    const rList = document.getElementById('p-report-list');
+    if(rList) {
+        rList.innerHTML = "<span class='text-xs text-slate-500 animate-pulse'>Lade Akten...</span>";
+        try {
+            rList.innerHTML = "";
+            // Strafakten
+            const crSnap = await db.collection('criminal_records').where('suspectId', '==', doc.id).orderBy('timestamp', 'desc').get();
+            if(!crSnap.empty) {
+                rList.innerHTML += "<div class='text-[10px] text-red-500 font-bold mb-1'>STRAFAKTEN</div>";
+                crSnap.forEach(rDoc => {
+                    const r = rDoc.data();
+                    rList.innerHTML += `<div class="bg-red-900/20 p-2 rounded border-l-2 border-red-500 mb-2 cursor-pointer" onclick="alert('${r.content.replace(/\n/g, "\\n")}')"><div class="text-[10px] text-slate-400">${r.date}</div><div class="text-xs text-white font-bold">${r.title}</div></div>`;
+                });
+            }
+            // Berichte
+            const rSnap = await db.collection('reports').orderBy('timestamp', 'desc').limit(50).get();
+            let found = false;
+            rSnap.forEach(rDoc => {
+                const r = rDoc.data();
+                if ((r.subject && r.subject.includes(p.lastname)) || (r.content && r.content.includes(p.lastname))) {
+                    if(!found) { rList.innerHTML += "<div class='text-[10px] text-blue-500 font-bold mb-1 mt-2'>BERICHTE</div>"; found=true; }
+                    rList.innerHTML += `<div class="bg-slate-900 p-2 rounded border-l-2 border-blue-500 mb-1 cursor-pointer" onclick="alert('${r.content.replace(/\n/g, "\\n")}')"><div class="text-[10px] text-slate-400">${r.deptPrefix}</div><div class="text-xs text-slate-300 truncate">${r.subject}</div></div>`;
+                }
+            });
+            if(crSnap.empty && !found) rList.innerHTML = "<span class='text-xs text-slate-500'>Keine Einträge.</span>";
+        } catch(e) { console.error(e); }
+    }
+}
+
+// ==========================================
+// 5. FAHRZEUGE (VEHICLES)
+// ==========================================
+async function liveSearchOwner(query) {
+    const dropdown = document.getElementById('owner-dropdown');
+    if (!query || query.length < 2) {
+        dropdown.classList.add('hidden');
+        return;
+    }
     try {
-        // FIX: Wir suchen jetzt im 'searchKey' (kleingeschrieben), damit er "Muster" auch findet, wenn man "muster" tippt.
+        // FIX: searchKey nutzen
         const snapshot = await db.collection('persons')
             .where('searchKey', '>=', query.toLowerCase())
             .where('searchKey', '<=', query.toLowerCase() + '\uf8ff')
@@ -318,35 +282,28 @@ async function liveSearchOwner(query) {
         
         dropdown.innerHTML = "";
         dropdown.classList.remove('hidden');
-        
+        dropdown.style.zIndex = "100"; // FIX Z-Index
+
         if (snapshot.empty) {
-            dropdown.innerHTML = "<div class='p-2 text-xs text-slate-500 bg-slate-800'>Keine Person gefunden</div>";
+            dropdown.innerHTML = "<div class='p-2 text-xs text-slate-500'>Nichts gefunden</div>";
             return;
         }
 
         snapshot.forEach(doc => {
             const p = doc.data();
             const div = document.createElement('div');
-            // Styling für die Liste
-            div.className = "p-3 hover:bg-blue-600 cursor-pointer border-b border-slate-700 text-xs bg-slate-900 text-white font-bold";
+            div.className = "p-2 hover:bg-slate-700 cursor-pointer text-xs bg-slate-900 text-white border-b border-slate-700";
             div.innerText = `${p.firstname} ${p.lastname}`;
-            
-            // Klick auf einen Namen
             div.onclick = () => {
                 document.getElementById('v-owner-id').value = doc.id;
-                document.getElementById('selected-owner-display').innerText = `Besitzer gewählt: ${p.firstname} ${p.lastname}`;
-                document.getElementById('selected-owner-display').className = "text-green-400 font-bold text-sm mt-2";
-                
-                // Dropdown schließen und Suchfeld leeren
+                document.getElementById('selected-owner-display').innerText = `Halter: ${p.firstname} ${p.lastname}`;
                 dropdown.classList.add('hidden');
-                document.getElementById('v-owner-search').value = ""; 
             };
             dropdown.appendChild(div);
         });
-    } catch (e) {
-        console.error("Owner Search Error:", e);
-    }
+    } catch(e) { console.error(e); }
 }
+
 async function saveVehicle() {
     const plate = document.getElementById('v-plate').value.toUpperCase();
     if (!plate) return alert("Kennzeichen fehlt.");
@@ -384,6 +341,7 @@ async function searchVehicle() {
             return;
         }
 
+        // Safe loop
         for (const doc of snapshot.docs) {
             const v = doc.data();
             let ownerName = "Unbekannt";
@@ -404,7 +362,9 @@ async function searchVehicle() {
     } catch (e) { console.error(e); }
 }
 
-// --- 6. REPORTS ---
+// ==========================================
+// 6. REPORTS
+// ==========================================
 async function openReportModal() {
     const prefix = currentUser.department === "MARSHAL" ? "LSMS" : "LSPD";
     const visual = document.getElementById('report-card-visual');
@@ -478,7 +438,9 @@ function filterReports(filter) {
     loadReports();
 }
 
-// --- 7. LISTENERS ---
+// ==========================================
+// 7. LISTENERS & DASHBOARD
+// ==========================================
 function startWantedListener() {
     db.collection('persons').where('tags', 'array-contains', 'Wanted').onSnapshot(snap => {
         const tbody = document.getElementById('wanted-list-body');
@@ -501,7 +463,9 @@ function startWantedListener() {
     });
 }
 
-// --- 8. EMPLOYEES & LAWS ---
+// ==========================================
+// 8. EMPLOYEES & LAWS
+// ==========================================
 const LAWS = [
     { id: "§1", name: "Speeding", price: 500, jail: 0 },
     { id: "§2", name: "Körperverletzung", price: 2500, jail: 10 },
@@ -571,7 +535,9 @@ async function removeUser(id) {
     }
 }
 
-// --- 9. COURT & IA ---
+// ==========================================
+// 9. SPECIAL (COURT & IA)
+// ==========================================
 async function loadCourtRecords() {
     const list = document.getElementById('court-record-list');
     if(!list) return;
@@ -629,19 +595,14 @@ async function saveIACase() {
 }
 
 // ==========================================
-// 10. AKTENEINTRÄGE (CRIMINAL RECORDS)
+// 10. NEUE STRAFAKTEN (RECORDS)
 // ==========================================
-
-// A. SUCHE
 async function liveSearchSuspectRecord(query) {
     const dropdown = document.getElementById('record-suspect-dropdown');
-    
-    // UI Check
     if (!query || query.length < 2) {
         dropdown.classList.add('hidden');
         return;
     }
-
     try {
         const snapshot = await db.collection('persons')
             .where('searchKey', '>=', query.toLowerCase())
@@ -650,7 +611,6 @@ async function liveSearchSuspectRecord(query) {
         
         dropdown.innerHTML = "";
         dropdown.classList.remove('hidden');
-        // WICHTIG: Z-Index erzwingen, damit es über dem Fenster liegt
         dropdown.style.zIndex = "9999"; 
         
         if (snapshot.empty) {
@@ -663,16 +623,12 @@ async function liveSearchSuspectRecord(query) {
             const div = document.createElement('div');
             div.className = "p-3 hover:bg-blue-600 cursor-pointer border-b border-slate-700 text-sm bg-slate-900 text-white font-bold flex justify-between";
             div.innerHTML = `<span>${p.firstname} ${p.lastname}</span> <span class="text-slate-400 font-mono text-xs">${p.dob}</span>`;
-            
-            div.onclick = () => {
-                selectSuspectForRecord(doc.id, `${p.firstname} ${p.lastname}`);
-            };
+            div.onclick = () => selectSuspectForRecord(doc.id, `${p.firstname} ${p.lastname}`);
             dropdown.appendChild(div);
         });
     } catch (e) { console.error(e); }
 }
 
-// B. AUSWAHL
 function selectSuspectForRecord(id, name) {
     document.getElementById('record-suspect-dropdown').classList.add('hidden');
     document.getElementById('record-step-1').classList.add('hidden');
@@ -682,14 +638,14 @@ function selectSuspectForRecord(id, name) {
     document.getElementById('record-suspect-id').value = id;
     document.getElementById('record-signature').innerText = currentUser.username;
     
-    // Zeit setzen
+    // ISO Zeit
     const now = new Date();
     const isoString = new Date(now.getTime() - (now.getTimezoneOffset() * 60000)).toISOString().slice(0,16);
     document.getElementById('record-time').value = isoString;
     const dateStr = now.toLocaleDateString('de-DE');
     const timeStr = now.toLocaleTimeString('de-DE', {hour: '2-digit', minute:'2-digit'});
 
-    // Vorlage
+    // TEMPLATE
     const template = `TATORT, DATUM UND UHRZEIT:
 PLZ ____, am ${dateStr} um ${timeStr} Uhr
 
@@ -700,23 +656,28 @@ SACHVERHALT:
 Was ist passiert?:
 
 
-BETEILIGTE BEAMTE:
+WER WAR DABEI (z.B. USMS, SMC etc.):
+
+
+FESTNEHMENDER BEAMTER (DN + Name):
+${currentUser.username}
+
+BETEILIGTE BEAMTE (DN + Name):
 - 
 
-ZEUGEN:
+ZEUGEN (Name, ggf. Telefonnummer):
 /
 
 RECHTE VERLESEN:
-Durch ${currentUser.username} am ${dateStr} um ${timeStr} Uhr.
+Die Mirandawarnung wurde durch ${currentUser.username} am ${dateStr} um ${timeStr} Uhr verlesen.
 
 VERMERKE:
-[ ] Kooperativ
-[ ] Nicht Kooperativ`;
+[ ] Kooperatives Verhalten
+[ ] Nicht Kooperatives Verhalten`;
 
     document.getElementById('record-content').value = template;
 }
 
-// C. RESET
 function resetRecordForm() {
     document.getElementById('record-step-2').classList.add('hidden');
     document.getElementById('record-step-1').classList.remove('hidden');
@@ -724,7 +685,6 @@ function resetRecordForm() {
     document.getElementById('record-title').value = "";
 }
 
-// D. SPEICHERN
 async function saveCriminalRecord() {
     const suspectId = document.getElementById('record-suspect-id').value;
     const suspectName = document.getElementById('record-suspect-name').innerText;
@@ -743,12 +703,9 @@ async function saveCriminalRecord() {
             department: currentUser.department,
             timestamp: firebase.firestore.FieldValue.serverTimestamp()
         });
-
         alert("Akte angelegt.");
         resetRecordForm();
-    } catch (e) {
-        alert("Fehler: " + e.message);
-    }
+    } catch (e) { alert("Fehler: " + e.message); }
 }
-    
-console.log("APP JS ENDE ERREICHT");
+
+console.log("SYSTEM GELADEN: ENDE");
