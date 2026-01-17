@@ -508,6 +508,40 @@
         </div>
     </div>
 </div>
+
+    <div class="modal fade" id="globalMessageModal" tabindex="-1" style="z-index: 1060;">
+    <div class="modal-dialog">
+        <div class="modal-content bg-dark text-white border-secondary">
+            <div class="modal-header border-secondary">
+                <h5 class="modal-title" id="msgTitle">Hinweis</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="msgBody"></div>
+            <div class="modal-footer border-secondary">
+                <button type="button" class="btn btn-primary" data-bs-dismiss="modal">Verstanden</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="globalInputModal" tabindex="-1" style="z-index: 1060;">
+    <div class="modal-dialog">
+        <div class="modal-content bg-dark text-white border-secondary">
+            <div class="modal-header border-secondary">
+                <h5 class="modal-title" id="inputTitle">Eingabe erforderlich</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <label id="inputLabel" class="form-label"></label>
+                <input type="text" id="globalInputValue" class="form-control">
+            </div>
+            <div class="modal-footer border-secondary">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Abbrechen</button>
+                <button type="button" class="btn btn-success" id="btnInputConfirm">Bestätigen</button>
+            </div>
+        </div>
+    </div>
+</div>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
@@ -1400,6 +1434,172 @@ async function submitRecordFromModal() {
         console.error(e);
         alert("Fehler beim Speichern: " + e.message);
     }
+}
+
+        // ==========================================
+// NEUE HELPER FÜR FENSTER (Statt alert/prompt)
+// ==========================================
+
+// Ersetzt alert()
+function showMsg(title, text) {
+    document.getElementById('msgTitle').innerText = title;
+    document.getElementById('msgBody').innerText = text;
+    new bootstrap.Modal(document.getElementById('globalMessageModal')).show();
+}
+
+// Ersetzt prompt() -> Nutzt Callback
+let inputCallback = null;
+function showInput(title, label, callback) {
+    document.getElementById('inputTitle').innerText = title;
+    document.getElementById('inputLabel').innerText = label;
+    document.getElementById('globalInputValue').value = "";
+    
+    const modalEl = document.getElementById('globalInputModal');
+    const modal = new bootstrap.Modal(modalEl);
+    
+    // Event Listener für den Bestätigen Button neu setzen
+    const btn = document.getElementById('btnInputConfirm');
+    // Alten Listener entfernen (Clone Trick)
+    const newBtn = btn.cloneNode(true);
+    btn.parentNode.replaceChild(newBtn, btn);
+    
+    newBtn.addEventListener('click', () => {
+        const val = document.getElementById('globalInputValue').value;
+        if(val) {
+            callback(val);
+            modal.hide();
+        }
+    });
+    
+    modal.show();
+}
+
+// ==========================================
+// UPDATES: TAGS & AKTEN LÖSCHEN
+// ==========================================
+
+// Update für openPersonFile (Tags löschbar machen)
+// Suche die alte openPersonFile Funktion und aktualisiere den "Render Tags" Teil hiermit:
+/* Füge diesen Block an der entsprechenden Stelle in 'openPersonFile' ein,
+   wo "Render Tags" steht.
+*/
+function renderTagsInModal(tags, personId) {
+    const tagsDiv = document.getElementById('detail-tags');
+    if(!tags || tags.length === 0) {
+        tagsDiv.innerHTML = "<small class='text-muted'>Keine Tags</small>";
+        return;
+    }
+
+    let html = "";
+    tags.forEach(t => {
+        // Rote Badge für Wanted, sonst grau
+        const colorClass = t === "Wanted" ? "bg-danger" : "bg-secondary";
+        
+        // Löschen nur per Klick ermöglichen
+        html += `<span class="badge ${colorClass} me-1" style="cursor:pointer;" 
+                  onclick="deleteTag('${personId}', '${t}')" 
+                  title="Klicken zum Entfernen">
+                  ${t} &times;
+                 </span>`;
+    });
+    tagsDiv.innerHTML = html;
+}
+
+// Funktion zum Löschen von Tags
+async function deleteTag(personId, tagText) {
+    // Sicherheitsabfrage (Optional, hier direkt via Logik)
+    // Wir nutzen hier ArrayRemove von Firestore
+    try {
+        await db.collection('civilians').doc(personId).update({
+            tags: firebase.firestore.FieldValue.arrayRemove(tagText)
+        });
+        
+        // UI Refresh (wir laden die Akte neu)
+        // Trick: Wir schließen das Modal nicht, sondern holen die Daten neu
+        const doc = await db.collection('civilians').doc(personId).get();
+        renderTagsInModal(doc.data().tags, personId);
+        showMsg("Erfolg", `Tag '${tagText}' entfernt.`);
+        
+    } catch(e) {
+        showMsg("Fehler", e.message);
+    }
+}
+
+// Update für loadPersonRecords (Lösch-Button hinzufügen)
+// Ersetze die alte loadPersonRecords Funktion hiermit:
+async function loadPersonRecords(id) {
+    const list = document.getElementById('detail-records-list');
+    list.innerHTML = "Lade...";
+    
+    const snap = await db.collection('civilians').doc(id).collection('records').orderBy('date', 'desc').get();
+    list.innerHTML = "";
+
+    // Prüfen ob User löschen darf (Admin, Judge, Command)
+    const myRank = currentUser.roleInfo;
+    const canDelete = myRank.canDelete || (myRank.lvl >= 4); // Command Level 4+ oder explizites Recht
+
+    snap.forEach(doc => {
+        const r = doc.data();
+        let dateStr = r.date ? new Date(r.date.toDate()).toLocaleDateString() : "Unbekannt";
+        
+        let deleteBtn = "";
+        if(canDelete) {
+            deleteBtn = `<button class="btn btn-sm btn-outline-danger float-end ms-2" 
+                         onclick="deleteRecord('${id}', '${doc.id}')">
+                         <i class="fas fa-trash"></i>
+                         </button>`;
+        }
+
+        list.innerHTML += `<div class="alert alert-dark border-secondary">
+            ${deleteBtn}
+            <small class="text-muted">${dateStr}</small><br>
+            <strong>${r.reason}</strong><br>
+            <span class="text-warning">Strafe: $${r.fine}</span> | 
+            <span class="text-danger">Haft: ${r.jail} Mon.</span> | 
+            <small>Officer: ${r.officer}</small>
+        </div>`;
+    });
+}
+
+// Funktion zum Löschen einer Akte
+async function deleteRecord(personId, recordId) {
+    // Hier nutzen wir unser neues Input Modal nicht, aber ein Confirm wäre gut.
+    // Da wir keine native "Confirm" Alternative gebaut haben, nutzen wir einen Trick
+    // oder bleiben kurz bei confirm() da es sicherer ist, oder bauen ein Confirm-Modal.
+    // Fürs erste nehmen wir das native confirm für Sicherheit, oder unser showMsg als Info.
+    
+    if(confirm("Diesen Eintrag wirklich unwiderruflich löschen?")) {
+        try {
+            await db.collection('civilians').doc(personId).collection('records').doc(recordId).delete();
+            loadPersonRecords(personId); // Liste neu laden
+            showMsg("Gelöscht", "Der Akteneintrag wurde entfernt.");
+        } catch(e) {
+            showMsg("Fehler", e.message);
+        }
+    }
+}
+
+// ==========================================
+// UPDATE: addInvestigation (Prompt ersetzen)
+// ==========================================
+// Ersetze die 'addInvestigation' Funktion von vorhin hiermit:
+
+function addInvestigation() {
+    showInput("Neue Ermittlung", "Titel der Ermittlungsakte:", async (val) => {
+        try {
+            await db.collection('civilians').doc(currentPersonId).collection('investigations').add({
+                title: val,
+                status: "Offen",
+                officer: currentUser.username,
+                notes: "Ermittlung gestartet.",
+                date: firebase.firestore.FieldValue.serverTimestamp()
+            });
+            loadPersonInvestigations(currentPersonId);
+            showMsg("Erfolg", "Ermittlungsakte angelegt.");
+        } catch (e) {
+            showMsg("Fehler", e.message);
+        }
+    });
 }
         
     </script>
