@@ -36,7 +36,6 @@ async function handleLogin() {
             
             document.getElementById('login-screen').classList.add('hidden');
             
-            // Header Infos
             if(document.getElementById('current-user-name')) document.getElementById('current-user-name').innerText = currentUser.username;
             if(document.getElementById('current-rank')) document.getElementById('current-rank').innerText = `${currentUser.rank}`;
             if(document.getElementById('user-avatar')) document.getElementById('user-avatar').innerText = currentUser.username.charAt(0).toUpperCase();
@@ -44,7 +43,6 @@ async function handleLogin() {
             applyTheme(currentUser.department);
             checkPermissions();
             
-            // START LISTENERS
             startWantedListener();
             initDashboard();
             initDispatchMonitor();
@@ -135,14 +133,12 @@ async function searchPerson() {
     const input = document.getElementById('search-person-input');
     const resultsDiv = document.getElementById('person-results');
     if (!resultsDiv) return;
-
     const term = input.value.trim().toLowerCase();
     resultsDiv.innerHTML = "<p class='text-slate-500'>Suche...</p>";
 
     try {
         let query = db.collection('persons');
         if (term.length > 0) query = query.where('searchKey', '>=', term).where('searchKey', '<=', term + '\uf8ff');
-        
         const snapshot = await query.limit(10).get();
         resultsDiv.innerHTML = "";
         if (snapshot.empty) { resultsDiv.innerHTML = "<p class='text-slate-500 col-span-3 text-center'>Keine Treffer.</p>"; return; }
@@ -166,7 +162,6 @@ async function savePerson() {
     const firstname = document.getElementById('p-firstname').value;
     const lastname = document.getElementById('p-lastname').value;
     if(!lastname) return alert("Name fehlt.");
-    
     const docId = `${firstname}_${lastname}`.toLowerCase().replace(/\s/g, '');
     const searchKey = (firstname + " " + lastname).toLowerCase();
 
@@ -185,7 +180,6 @@ async function savePerson() {
 async function viewProfile(personId) {
     const modal = document.getElementById('modal-person');
     if(modal) modal.classList.remove('hidden');
-    
     const doc = await db.collection('persons').doc(personId).get();
     if (!doc.exists) return;
     const p = doc.data();
@@ -253,8 +247,7 @@ async function liveSearchOwner(query) {
     if (!query || query.length < 2) { dropdown.classList.add('hidden'); return; }
     try {
         const snap = await db.collection('persons').where('searchKey', '>=', query.toLowerCase()).where('searchKey', '<=', query.toLowerCase() + '\uf8ff').limit(5).get();
-        dropdown.innerHTML = "";
-        dropdown.classList.remove('hidden'); dropdown.style.zIndex = "100";
+        dropdown.innerHTML = ""; dropdown.classList.remove('hidden'); dropdown.style.zIndex = "100";
         if (snap.empty) { dropdown.innerHTML = "<div class='p-2 text-xs text-slate-500'>Nichts gefunden</div>"; return; }
         snap.forEach(doc => {
             const p = doc.data();
@@ -283,7 +276,6 @@ async function searchVehicle() {
     if (!input || !div) return;
     const term = input.value.trim().toUpperCase();
     if (term.length === 0) { div.innerHTML = "<p class='text-slate-500 col-span-3 text-center'>Kennzeichen eingeben...</p>"; return; }
-
     try {
         const snap = await db.collection('vehicles').where('plate', '>=', term).where('plate', '<=', term + '\uf8ff').limit(10).get();
         div.innerHTML = "";
@@ -312,13 +304,10 @@ async function openReportModal() {
     const prefix = currentUser.department === "MARSHAL" ? "LSMS" : "LSPD";
     const visual = document.getElementById('report-card-visual');
     const header = document.getElementById('r-header-title');
-    
     if(prefix === "LSMS") { visual.className = "glass-panel p-8 w-[800px] border-t-4 border-amber-500"; header.classList.add('text-amber-500'); }
     else { visual.className = "glass-panel p-8 w-[800px] border-t-4 border-blue-500"; header.classList.add('text-blue-500'); }
-
     const snap = await db.collection('reports').get();
     const id = `${prefix}-${String(snap.size + 1000).padStart(4, '0')}`;
-    
     document.getElementById('r-id-preview').innerText = id;
     document.getElementById('r-officers').value = currentUser.username;
     document.getElementById('r-content').value = "SITUATION:\n\n\nMASSNAHMEN:\n\n\nERGEBNIS:"; 
@@ -330,7 +319,6 @@ async function saveReport() {
     const content = document.getElementById('r-content').value;
     const subj = document.getElementById('r-subject').value;
     if(!subj) return alert("Betreff fehlt.");
-
     await db.collection('reports').doc(id).set({
         reportId: id, deptPrefix: id.split('-')[0], subject: subj, content,
         author: currentUser.username, rank: currentUser.rank, location: document.getElementById('r-location').value,
@@ -345,7 +333,6 @@ async function loadReports() {
     const snap = await query.get();
     list.innerHTML = "";
     if(document.getElementById('stat-report-count')) document.getElementById('stat-report-count').innerText = snap.size; 
-
     snap.forEach(doc => {
         const r = doc.data();
         if (currentReportFilter !== 'ALL' && r.deptPrefix !== currentReportFilter) return;
@@ -380,12 +367,11 @@ function startWantedListener() {
 // 8. LAWS (GESETZE)
 // ==========================================
 
-// --- HIER UNTEN DEINE LISTE EINFÜGEN ---
 const LAWS = [
-    // LÖSCHE DIESE ZEILE UND KOPIERE DEINE GESETZE HIER REIN (zwischen die eckigen Klammern)
+
+    // HIER FÜGST DU DEINE GESETZE EIN
     
 ];
-// ---------------------------------------
 
 let cart = [];
 function loadLaws(searchTerm = "") {
@@ -394,10 +380,8 @@ function loadLaws(searchTerm = "") {
     list.innerHTML = "";
     const term = searchTerm.toLowerCase();
     const filtered = LAWS.filter(l => l.id.toLowerCase().includes(term) || l.de.toLowerCase().includes(term) || (l.text && l.text.toLowerCase().includes(term)));
-    
     if(filtered.length === 0) { list.innerHTML = "<div class='text-slate-500 text-xs p-2'>Kein Gesetz gefunden.</div>"; return; }
     const displayList = (term === "") ? filtered.slice(0, 50) : filtered;
-
     displayList.forEach(l => {
         list.innerHTML += `
             <div class="p-3 hover:bg-slate-700 cursor-pointer border-b border-slate-700/50 group" onclick="addToCart('${l.id}')">
