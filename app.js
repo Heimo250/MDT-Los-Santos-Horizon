@@ -212,29 +212,67 @@ async function viewProfile(personId) {
         });
     }
 
-    const rList = document.getElementById('p-report-list');
+  const rList = document.getElementById('p-report-list');
     if(rList) {
         rList.innerHTML = "<span class='text-xs text-slate-500 animate-pulse'>Lade Akten...</span>";
         try {
             rList.innerHTML = "";
-            const crSnap = await db.collection('criminal_records').where('suspectId', '==', doc.id).orderBy('timestamp', 'desc').get();
+            
+            // 1. STRAFAKTEN (ROT)
+            const crSnap = await db.collection('criminal_records')
+                                   .where('suspectId', '==', doc.id)
+                                   .orderBy('timestamp', 'desc').get();
+            
             if(!crSnap.empty) {
-                rList.innerHTML += "<div class='text-[10px] text-red-500 font-bold mb-1'>STRAFAKTEN</div>";
+                rList.innerHTML += "<div class='text-[10px] text-red-500 font-bold mb-1 mt-1 border-b border-red-900/30 pb-1'>STRAFAKTEN</div>";
                 crSnap.forEach(rDoc => {
                     const r = rDoc.data();
-                    rList.innerHTML += `<div class="bg-red-900/20 p-2 rounded border-l-2 border-red-500 mb-2 cursor-pointer" onclick="alert('${r.content.replace(/\n/g, "\\n")}')"><div class="text-[10px] text-slate-400">${r.date}</div><div class="text-xs text-white font-bold">${r.title}</div></div>`;
+                    // HIER IST DIE ÄNDERUNG: Wir nutzen openFullRecord und encodeURIComponent
+                    const safeContent = encodeURIComponent(r.content); 
+                    
+                    rList.innerHTML += `
+                        <div class="bg-red-900/10 p-3 rounded border-l-2 border-red-600 mb-2 cursor-pointer hover:bg-red-900/30 transition group" 
+                             onclick="openFullRecord('${r.title}', '${r.date}', '${r.officer}', '${safeContent}')">
+                            <div class="flex justify-between text-[10px] text-slate-400 mb-1">
+                                <span>${r.date.replace('T', ' ')}</span>
+                                <span class="group-hover:text-white">${r.officer}</span>
+                            </div>
+                            <div class="text-sm font-bold text-slate-200 group-hover:text-white">⚖️ ${r.title}</div>
+                        </div>`;
                 });
             }
+
+            // 2. BERICHTE (BLAU)
             const rSnap = await db.collection('reports').orderBy('timestamp', 'desc').limit(50).get();
             let found = false;
+            let reportHTML = "";
+            
             rSnap.forEach(rDoc => {
                 const r = rDoc.data();
+                // Prüfen ob Name vorkommt
                 if ((r.subject && r.subject.includes(p.lastname)) || (r.content && r.content.includes(p.lastname))) {
-                    if(!found) { rList.innerHTML += "<div class='text-[10px] text-blue-500 font-bold mb-1 mt-2'>BERICHTE</div>"; found=true; }
-                    rList.innerHTML += `<div class="bg-slate-900 p-2 rounded border-l-2 border-blue-500 mb-1 cursor-pointer" onclick="alert('${r.content.replace(/\n/g, "\\n")}')"><div class="text-[10px] text-slate-400">${r.deptPrefix}</div><div class="text-xs text-slate-300 truncate">${r.subject}</div></div>`;
+                    const safeContent = encodeURIComponent(r.content);
+                    reportHTML += `
+                        <div class="bg-blue-900/10 p-2 rounded border-l-2 border-blue-500 mb-1 cursor-pointer hover:bg-blue-900/30 transition" 
+                             onclick="openFullRecord('${r.subject}', '${r.timestamp ? r.timestamp.toDate().toLocaleDateString() : ''}', '${r.author}', '${safeContent}')">
+                            <div class="flex justify-between text-[10px] text-slate-500">
+                                <span>${r.deptPrefix}</span>
+                                <span>${r.timestamp ? r.timestamp.toDate().toLocaleDateString() : 'N/A'}</span>
+                            </div>
+                            <div class="text-xs font-bold text-slate-300 truncate">📄 ${r.subject}</div>
+                        </div>`;
+                    found = true;
                 }
             });
-            if(crSnap.empty && !found) rList.innerHTML = "<span class='text-xs text-slate-500'>Keine Einträge.</span>";
+
+            if(found) {
+                rList.innerHTML += "<div class='text-[10px] text-blue-500 font-bold mb-1 mt-4 border-b border-blue-900/30 pb-1'>ERWÄHNUNGEN IN BERICHTEN</div>" + reportHTML;
+            }
+
+            if(crSnap.empty && !found) {
+                rList.innerHTML = "<div class='text-center py-4 text-slate-600 text-xs italic'>Keine Einträge vorhanden.</div>";
+            }
+
         } catch(e) { console.error(e); }
     }
 }
@@ -918,6 +956,21 @@ function initDispatchMonitor() {
         if(document.getElementById('count-lspd')) document.getElementById('count-lspd').innerText = cLSPD;
         if(document.getElementById('count-lsms')) document.getElementById('count-lsms').innerText = cLSMS;
     });
+}
+
+// ==========================================
+// HELPER: AKTE LESEN (GROSS)
+// ==========================================
+function openFullRecord(title, date, officer, encodedContent) {
+    // Inhalt dekodieren (damit Sonderzeichen nicht kaputt gehen)
+    const content = decodeURIComponent(encodedContent);
+
+    document.getElementById('view-rec-title').innerText = title;
+    document.getElementById('view-rec-date').innerText = date;
+    document.getElementById('view-rec-officer').innerText = "Verfasst von: " + officer;
+    document.getElementById('view-rec-content').innerText = content;
+
+    document.getElementById('modal-record-view').classList.remove('hidden');
 }
 
 console.log("SYSTEM GELADEN: ENDE");
