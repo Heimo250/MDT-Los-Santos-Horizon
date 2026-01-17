@@ -166,16 +166,54 @@ async function searchPerson() {
     const input = document.getElementById('search-person-input');
     const resultsDiv = document.getElementById('person-results');
     
-    // Sicherheitscheck: Existieren die Elemente?
-    if (!input || !resultsDiv) return console.error("Suchfeld nicht gefunden!");
+    if (!resultsDiv) return;
 
+    // Wir suchen nach dem kleingeschriebenen Begriff
     const term = input.value.trim().toLowerCase();
 
-    // Reset bei leerem Feld
-    if (term.length === 0) {
-        resultsDiv.innerHTML = "<p class='text-slate-500 col-span-3 text-center'>Geben Sie einen Namen ein...</p>";
-        return;
+    try {
+        let query = db.collection('persons');
+
+        // Nur filtern, wenn auch was getippt wurde
+        if (term.length > 0) {
+            // Wir suchen im neuen Feld 'searchKey' statt 'lastname'
+            query = query.where('searchKey', '>=', term)
+                         .where('searchKey', '<=', term + '\uf8ff');
+        }
+
+        const snapshot = await query.limit(10).get();
+        resultsDiv.innerHTML = "";
+
+        if (snapshot.empty) {
+            resultsDiv.innerHTML = "<p class='text-slate-500 col-span-3 text-center'>Keine Einträge gefunden.</p>";
+            // DEBUG-HILFE: Zeige an, wonach gesucht wurde
+            console.log(`Suche nach '${term}' ergab 0 Treffer.`);
+            return;
+        }
+
+        snapshot.forEach(doc => {
+            const p = doc.data();
+            const isWanted = p.tags && p.tags.includes('Wanted');
+            const borderClass = isWanted ? "border-red-500" : "border-slate-600";
+            
+            resultsDiv.innerHTML += `
+                <div class="glass-panel p-4 rounded border-l-4 ${borderClass} hover:bg-slate-800 transition cursor-pointer relative group" onclick="viewProfile('${doc.id}')">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <h4 class="font-bold text-lg text-white">${p.firstname} ${p.lastname}</h4>
+                            <p class="text-xs text-slate-400 font-mono">Geb: ${p.dob} | ${p.height}cm</p>
+                        </div>
+                        ${isWanted ? '<span class="animate-pulse text-xl">🚨</span>' : ''}
+                    </div>
+                </div>`;
+        });
+    } catch (e) {
+        console.error("Such-Fehler:", e);
+        if(e.code === 'failed-precondition') {
+             alert("ACHTUNG: Firebase Index fehlt! Öffne die Konsole (F12) und klicke auf den Link in der Fehlermeldung.");
+        }
     }
+}
 
     try {
         // Suche starten
@@ -215,22 +253,39 @@ async function searchPerson() {
         if(e.message.includes("requires an index")) alert("Datenbank-Index fehlt! Bitte Konsole (F12) prüfen und Link anklicken.");
     }
 }
+// A. PERSON SPEICHERN (Mit Such-Hilfe)
 async function savePerson() {
+    const firstname = document.getElementById('p-firstname').value;
+    const lastname = document.getElementById('p-lastname').value;
+    
+    // Validierung
+    if(!lastname) return alert("Nachname fehlt.");
+    
     const pData = {
-        firstname: document.getElementById('p-firstname').value,
-        lastname: document.getElementById('p-lastname').value,
+        firstname: firstname,
+        lastname: lastname,
+        // WICHTIG: Wir erstellen ein Feld extra für die Suche in Kleinschrift
+        searchKey: lastname.toLowerCase(), 
         dob: document.getElementById('p-dob').value,
         height: document.getElementById('p-height').value,
         tags: selectedTags,
         createdAt: firebase.firestore.FieldValue.serverTimestamp()
     };
-    if(!pData.lastname) return alert("Nachname fehlt.");
     
-    const docId = `${pData.firstname}_${pData.lastname}`.toLowerCase();
-    await db.collection('persons').doc(docId).set(pData, { merge: true });
-    alert("Person gespeichert.");
-    closeModal();
-    searchPerson();
+    // Doc-ID erstellen (z.B. max_mustermann)
+    const docId = `${firstname}_${lastname}`.toLowerCase().replace(/\s/g, '');
+    
+    try {
+        await db.collection('persons').doc(docId).set(pData, { merge: true });
+        alert("Person gespeichert!");
+        closeModal();
+        // Leere das Suchfeld und lade die Liste neu
+        document.getElementById('search-person-input').value = lastname;
+        searchPerson(); 
+    } catch (e) {
+        console.error("Speicherfehler:", e);
+        alert("Fehler beim Speichern: " + e.message);
+    }
 }
 
 // ==========================================
