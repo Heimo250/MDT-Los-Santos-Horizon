@@ -327,6 +327,35 @@
         </div>
     </div>
 
+<div class="modal fade" id="reportModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content bg-dark text-white">
+            <div class="modal-header">
+                <h5 class="modal-title">Einsatzbericht verfassen</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label>Schnell-Vorlage:</label>
+                    <button class="btn btn-sm btn-outline-info me-2" onclick="setTemplate('standard')">Standard Einsatz</button>
+                    <button class="btn btn-sm btn-outline-warning" onclick="setTemplate('arrest')">Festnahme</button>
+                </div>
+                <div class="mb-3">
+                    <label>Titel / Betreff</label>
+                    <input type="text" id="repTitle" class="form-control" placeholder="z.B. Bankraub Paleto Bay">
+                </div>
+                <div class="mb-3">
+                    <label>Inhalt</label>
+                    <textarea id="repContent" class="form-control" rows="12"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-primary" onclick="submitReport()">Absenden & Signieren</button>
+            </div>
+        </div>
+    </div>
+</div>
+    
     <div class="modal fade" id="personDetailModal" tabindex="-1">
         <div class="modal-dialog modal-xl">
             <div class="modal-content bg-dark text-white">
@@ -400,6 +429,40 @@
             </div>
         </div>
     </div>
+
+    <div class="modal fade" id="addVehicleModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content bg-dark text-white">
+            <div class="modal-header">
+                <h5 class="modal-title">Fahrzeug registrieren</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="vehForm">
+                    <div class="mb-2">
+                        <label>Kennzeichen (Plate)</label>
+                        <input type="text" id="vPlate" class="form-control" style="text-transform: uppercase;" required>
+                    </div>
+                    <div class="mb-2">
+                        <label>Modell & Marke</label>
+                        <input type="text" id="vModel" class="form-control" placeholder="z.B. Ubermacht Oracle" required>
+                    </div>
+                    <div class="mb-2">
+                        <label>Farbe</label>
+                        <input type="text" id="vColor" class="form-control" required>
+                    </div>
+                    <div class="mb-2">
+                        <label>Besitzer (Name)</label>
+                        <input type="text" id="vOwner" class="form-control" placeholder="Vorname Nachname" required>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-success" onclick="submitNewVehicle()">Registrieren</button>
+            </div>
+        </div>
+    </div>
+</div>
 
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
@@ -862,6 +925,274 @@
             window.print(); // Simple Browser Print to PDF
         }
 
+    
+// ==========================================
+// MODULE: REPORTS (EINSATZBERICHTE)
+// ==========================================
+
+// 1. Fenster öffnen
+function createNewReport() {
+    document.getElementById('repTitle').value = "";
+    document.getElementById('repContent').value = "";
+    new bootstrap.Modal(document.getElementById('reportModal')).show();
+}
+
+// 2. Vorlagen einfügen
+function setTemplate(type) {
+    const area = document.getElementById('repContent');
+    if (type === 'standard') {
+        area.value = "SITUATION:\n\n\nBETEILIGTE PERSONEN:\n- \n\n\nMASSNAHMEN:\n- \n\n\nBEWEISMITTEL:\n- ";
+    } else if (type === 'arrest') {
+        area.value = "GRUND DER FESTNAHME:\n\n\nVERDÄCHTIGER:\nName: \n\n\nMIRANDA RECHTE GELESEN:\n[ ] JA  [ ] NEIN\n\nBESCHLAGNAHMTE GEGENSTÄNDE:\n- ";
+    }
+}
+
+// 3. Bericht speichern (mit automatischer Nummerierung)
+async function submitReport() {
+    const title = document.getElementById('repTitle').value;
+    const content = document.getElementById('repContent').value;
+    
+    if(!title || !content) {
+        alert("Bitte Titel und Inhalt ausfüllen.");
+        return;
+    }
+
+    // Präfix basierend auf Department bestimmen
+    let prefix = "GENERIC";
+    const dept = currentUser.roleInfo.dept; // LSPD, MARSHAL, DOJ etc.
+    
+    if (dept === "LSPD") prefix = "LSPD-EINSATZ";
+    else if (dept === "MARSHAL") prefix = "LSMS-EINSATZ";
+    else if (dept === "DOJ" || dept === "COURT") prefix = "DOJ-AKTE";
+    else prefix = "BERICHT";
+
+    try {
+        // Wir zählen die vorhandenen Berichte um die Nummer zu generieren
+        // (Für einfache Zwecke reicht snapshot.size. In Produktion bräuchte man einen Counter)
+        const snapshot = await db.collection('reports').get();
+        const count = snapshot.size + 1;
+        // Macht aus "1" -> "001"
+        const numberStr = count.toString().padStart(3, '0'); 
+        const reportId = `${prefix}-${numberStr}`;
+
+        await db.collection('reports').add({
+            reportId: reportId,
+            title: title,
+            content: content,
+            author: currentUser.username,
+            rank: currentUser.rank,
+            dept: dept,
+            date: firebase.firestore.FieldValue.serverTimestamp()
+        });
+
+        alert("Bericht " + reportId + " erfolgreich angelegt.");
+        bootstrap.Modal.getInstance(document.getElementById('reportModal')).hide();
+        loadReports(); // Liste aktualisieren
+
+    } catch (e) {
+        console.error(e);
+        alert("Fehler beim Speichern: " + e.message);
+    }
+}
+
+// 4. Berichte laden und anzeigen
+async function loadReports() {
+    const container = document.getElementById('reports-list');
+    container.innerHTML = "Lade Berichte...";
+
+    try {
+        const snapshot = await db.collection('reports').orderBy('date', 'desc').get();
+        container.innerHTML = "";
+
+        if(snapshot.empty) {
+            container.innerHTML = "<p class='text-muted'>Keine Berichte vorhanden.</p>";
+            return;
+        }
+
+        snapshot.forEach(doc => {
+            const r = doc.data();
+            // Datum formatieren
+            let dateStr = "Unbekannt";
+            if(r.date) dateStr = new Date(r.date.toDate()).toLocaleString();
+
+            // Farbe basierend auf Department
+            let borderClass = "border-secondary";
+            if(r.dept === "LSPD") borderClass = "border-primary"; // Blau
+            if(r.dept === "MARSHAL") borderClass = "border-success"; // Grün/Oliv (Bootstrap success ist grün)
+
+            const card = `
+            <div class="col-md-6 mb-3">
+                <div class="card h-100 ${borderClass}" style="border-left-width: 5px;">
+                    <div class="card-header d-flex justify-content-between">
+                        <strong>${r.reportId}</strong>
+                        <small>${dateStr}</small>
+                    </div>
+                    <div class="card-body">
+                        <h5 class="card-title">${r.title}</h5>
+                        <p class="card-text" style="white-space: pre-wrap; max-height: 150px; overflow: hidden;">${r.content}</p>
+                        <button class="btn btn-sm btn-outline-light" onclick="viewReportDetail('${doc.id}')">Vollständig lesen</button>
+                    </div>
+                    <div class="card-footer text-muted font-monospace small">
+                        Gez. ${r.rank} ${r.author}
+                    </div>
+                </div>
+            </div>`;
+            container.innerHTML += card;
+        });
+
+    } catch(e) {
+        console.error(e);
+        container.innerHTML = "Fehler beim Laden: " + e.message;
+    }
+}
+
+// Hilfsfunktion um Bericht ganz zu lesen (alert als einfache Lösung)
+async function viewReportDetail(id) {
+    const doc = await db.collection('reports').doc(id).get();
+    const r = doc.data();
+    alert(`BERICHT: ${r.reportId}\n\n${r.title}\n----------------\n${r.content}\n\nGezeichnet:\n${r.author}`);
+}
+
+// ==========================================
+// FEHLENDE FUNKTIONEN: FAHRZEUGE & ERMITTLUNGEN
+// ==========================================
+
+// 1. Fahrzeuge einer Person laden (Fix für den ReferenceError)
+async function loadPersonVehicles(personId) {
+    const list = document.getElementById('detail-vehicles-list');
+    list.innerHTML = "Lade Fahrzeuge...";
+    
+    // Wir suchen Fahrzeuge, die diesem User gehören (via ownerId oder Name)
+    // Vereinfachung: Wir suchen hier nach Owner ID, die wir beim Erstellen speichern müssten.
+    // Da wir im vereinfachten Modus sind, suchen wir erstmal Dummy-Daten oder implementieren die Suche später strikter.
+    
+    try {
+        const snap = await db.collection('vehicles').where('ownerId', '==', personId).get();
+        list.innerHTML = "";
+        
+        if (snap.empty) {
+            list.innerHTML = "<p class='text-muted'>Keine Fahrzeuge registriert.</p>";
+            return;
+        }
+
+        snap.forEach(doc => {
+            const v = doc.data();
+            list.innerHTML += `
+                <div class="d-flex justify-content-between align-items-center bg-dark border border-secondary p-2 mb-2 rounded">
+                    <div>
+                        <h5 class="mb-0 text-warning">${v.plate}</h5>
+                        <small>${v.model} | ${v.color}</small>
+                    </div>
+                    <i class="fas fa-car fa-2x text-muted"></i>
+                </div>`;
+        });
+    } catch (e) {
+        console.error(e);
+        list.innerHTML = "Fehler beim Laden.";
+    }
+}
+
+// 2. Ermittlungen laden (Fix für ReferenceError)
+async function loadPersonInvestigations(personId) {
+    const list = document.getElementById('detail-investigation-list');
+    list.innerHTML = "Lade Ermittlungsakten...";
+    
+    // Hier würde man echte Akten laden. Fürs Demo zeigen wir Placeholder.
+    list.innerHTML = "<p class='text-muted'>Keine laufenden Ermittlungen.</p>";
+}
+
+// 3. Bild-Fix (Placeholder URL ändern)
+// Suche im Code nach "https://via.placeholder.com/150" und ersetze es hiermit:
+const PLACEHOLDER_IMG = "https://placehold.co/150/1e1e1e/white?text=No+Image";
+// Wenn du ein Bild lädst, nutze diesen Fallback, falls das Feld leer ist.
+
+
+// ==========================================
+// FAHRZEUG VERWALTUNG (Dashboard & Register)
+// ==========================================
+
+function openAddVehicleModal() {
+    new bootstrap.Modal(document.getElementById('addVehicleModal')).show();
+}
+
+async function submitNewVehicle() {
+    const plate = document.getElementById('vPlate').value.toUpperCase();
+    const model = document.getElementById('vModel').value;
+    const color = document.getElementById('vColor').value;
+    const ownerName = document.getElementById('vOwner').value;
+
+    // Wir versuchen, die Person ID anhand des Namens zu finden, um es zu verknüpfen
+    let ownerId = "UNKNOWN";
+    
+    // Einfache Namenssuche (Vorname Nachname trennen)
+    const parts = ownerName.split(' ');
+    if(parts.length >= 2) {
+        const pSnap = await db.collection('civilians')
+            .where('firstName', '==', parts[0])
+            .where('lastName', '==', parts[1])
+            .limit(1).get();
+        
+        if(!pSnap.empty) {
+            ownerId = pSnap.docs[0].id;
+        }
+    }
+
+    await db.collection('vehicles').add({
+        plate: plate,
+        model: model,
+        color: color,
+        owner: ownerName,
+        ownerId: ownerId, // Wichtig für die Verknüpfung zur Akte!
+        registeredBy: currentUser.username,
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+
+    alert("Fahrzeug " + plate + " registriert!");
+    bootstrap.Modal.getInstance(document.getElementById('addVehicleModal')).hide();
+    
+    // Falls wir gerade in der Fahrzeugansicht sind -> aktualisieren
+    if(document.getElementById('view-vehicles').classList.contains('hidden') === false) {
+        searchVehicle(); 
+    }
+}
+
+async function searchVehicle() {
+    const query = document.getElementById('vehicleSearchInput').value.toUpperCase();
+    const resDiv = document.getElementById('vehicle-results');
+    resDiv.innerHTML = "Suche...";
+    
+    // Wenn leer, zeige die letzten 10
+    let qRef = db.collection('vehicles');
+    if(query) {
+        qRef = qRef.where('plate', '>=', query).where('plate', '<=', query + '\uf8ff');
+    } else {
+        qRef = qRef.orderBy('createdAt', 'desc').limit(10);
+    }
+
+    const snap = await qRef.get();
+    resDiv.innerHTML = "";
+    
+    if(snap.empty) {
+        resDiv.innerHTML = "Kein Fahrzeug gefunden.";
+        return;
+    }
+
+    snap.forEach(doc => {
+        const v = doc.data();
+        resDiv.innerHTML += `
+            <div class="alert alert-dark border-secondary d-flex justify-content-between align-items-center">
+                <div>
+                    <h4>${v.plate}</h4>
+                    <span>${v.model} (${v.color})</span><br>
+                    <small class="text-muted">Halter: ${v.owner}</small>
+                </div>
+                <div>
+                    ${v.ownerId !== "UNKNOWN" ? `<button class="btn btn-sm btn-primary" onclick="openPersonFile('${v.ownerId}')">Halter Akte</button>` : ''}
+                </div>
+            </div>`;
+    });
+}
+        
     </script>
 </body>
 </html>
