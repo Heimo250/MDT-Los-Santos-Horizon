@@ -3,831 +3,343 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Horizon Justice System - MDT</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    
+    <title>San Andreas State MDT</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
     <style>
-        :root {
-            --bg-dark: #121212;
-            --bg-panel: #1e1e1e;
-            --accent: #375a7f;
-            --text-main: #e0e0e0;
-        }
-        body { background-color: var(--bg-dark); color: var(--text-main); font-family: 'Segoe UI', Roboto, Arial, sans-serif; overflow-x: hidden; }
+        /* MDT CORE STYLES */
+        body { background-color: #020617; color: #e2e8f0; font-family: 'Segoe UI', sans-serif; overflow: hidden; }
+        .font-mono-numbers { font-family: 'Courier New', monospace; letter-spacing: -0.5px; }
         
-        /* Layout */
-        #login-screen { height: 100vh; display: flex; align-items: center; justify-content: center; background: radial-gradient(circle at center, #2c3e50 0%, #000000 100%); }
-        #mdt-app { display: none; min-height: 100vh; }
-        .sidebar { background-color: var(--bg-panel); border-right: 1px solid #333; min-height: 100vh; padding-top: 20px; }
-        .content-area { padding: 20px; }
-        
-        /* Elements */
-        .nav-link { color: #aaa; margin-bottom: 5px; border-radius: 5px; padding: 10px 15px; cursor: pointer; }
-        .nav-link:hover, .nav-link.active { background-color: var(--accent); color: white; }
-        .card { background-color: var(--bg-panel); border: 1px solid #333; color: white; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
-        .card-header { border-bottom: 1px solid #444; font-weight: bold; background-color: rgba(255,255,255,0.05); }
-        .form-control, .form-select { background-color: #2b2b2b; border: 1px solid #444; color: white; }
-        .form-control:focus { background-color: #333; color: white; border-color: var(--accent); box-shadow: none; }
-        
-        /* Utils */
-        .badge-wanted { background-color: #dc3545; animation: pulse 2s infinite; }
-        .hidden { display: none !important; }
-        .pointer { cursor: pointer; }
-        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.6; } 100% { opacity: 1; } }
+        /* SCROLLBAR */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: #0f172a; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #475569; }
+
+        /* THEME VARIABLES (Default LSPD) */
+        :root { --accent-color: #3b82f6; --accent-glow: rgba(59, 130, 246, 0.2); }
+        .theme-marshal { --accent-color: #d97706; --accent-glow: rgba(217, 119, 6, 0.2); }
+        .theme-doj { --accent-color: #9333ea; --accent-glow: rgba(147, 51, 234, 0.2); }
+        .theme-ia { --accent-color: #dc2626; --accent-glow: rgba(220, 38, 38, 0.2); }
+
+        /* UTILITIES */
+        .glass-panel { background: rgba(30, 41, 59, 0.7); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.1); }
+        .nav-item.active { border-left: 3px solid var(--accent-color); background: linear-gradient(90deg, var(--accent-glow) 0%, transparent 100%); color: white; }
+        .input-field { background: #0f172a; border: 1px solid #334155; color: white; transition: all 0.2s; }
+        .input-field:focus { border-color: var(--accent-color); outline: none; box-shadow: 0 0 10px var(--accent-glow); }
+        .btn-primary { background-color: var(--accent-color); transition: filter 0.2s; }
+        .btn-primary:hover { filter: brightness(1.2); }
     </style>
 </head>
-<body>
+<body class="flex h-screen text-sm">
 
-    <div id="login-screen">
-        <div class="card p-4" style="width: 400px;">
-            <div class="text-center mb-4">
-                <i class="fas fa-balance-scale fa-3x text-white"></i>
-                <h3 class="mt-2">MDT Access</h3>
-                <small class="text-muted">Los Santos Horizon</small>
+    <div id="login-screen" class="fixed inset-0 z-[100] flex items-center justify-center bg-[#020617] bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')]">
+        <div class="glass-panel p-10 w-96 rounded-lg shadow-2xl border-t-4 border-blue-600 text-center relative overflow-hidden">
+            <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-blue-500 to-transparent opacity-50"></div>
+            <h1 class="text-3xl font-black mb-1 tracking-tighter text-white">SAN ANDREAS</h1>
+            <p class="text-slate-400 text-xs mb-8 uppercase tracking-[0.3em]">Department of Justice</p>
+            
+            <div class="space-y-4 text-left">
+                <div>
+                    <label class="text-[10px] uppercase text-slate-500 font-bold ml-1">Dienstausweis ID</label>
+                    <input type="text" id="login-user" class="input-field w-full p-3 rounded font-mono" placeholder="username">
+                </div>
+                <div>
+                    <label class="text-[10px] uppercase text-slate-500 font-bold ml-1">Passwort</label>
+                    <input type="password" id="login-pass" class="input-field w-full p-3 rounded" placeholder="••••••">
+                </div>
+                <button onclick="handleLogin()" class="w-full bg-blue-600 hover:bg-blue-500 text-white py-3 rounded font-bold shadow-[0_0_15px_rgba(37,99,235,0.4)] transition-all mt-4">SYSTEM ZUGRIFF</button>
             </div>
-            <form id="loginForm">
-                <div class="mb-3">
-                    <label class="form-label">Benutzername</label>
-                    <input type="text" id="loginUser" class="form-control" placeholder="Vorname.Nachname" required>
-                </div>
-                <div class="mb-3">
-                    <label class="form-label">Passwort</label>
-                    <input type="password" id="loginPass" class="form-control" required>
-                </div>
-                <button type="submit" class="btn btn-primary w-100">Einloggen</button>
-                <div id="loginError" class="text-danger mt-2 text-center small"></div>
-            </form>
+            <p class="mt-6 text-[10px] text-slate-600">Unauthorized access is a federal crime.</p>
         </div>
     </div>
 
-    <div id="mdt-app" class="container-fluid">
-        <div class="row">
-            <div class="col-md-2 sidebar d-flex flex-column">
-                <div class="text-center mb-4 text-white">
-                    <div class="fw-bold" id="currentUserDisplay">Officer</div>
-                    <small id="currentRankDisplay" class="text-muted">Lade...</small>
-                </div>
-                <nav class="nav flex-column">
-                    <a class="nav-link active" onclick="showView('dashboard')"><i class="fas fa-home me-2"></i> Startseite</a>
-                    <a class="nav-link" onclick="showView('persons')"><i class="fas fa-users me-2"></i> Personen</a>
-                    <a class="nav-link" onclick="showView('vehicles')"><i class="fas fa-car me-2"></i> Fahrzeuge</a>
-                    <a class="nav-link" onclick="showView('reports')"><i class="fas fa-file-alt me-2"></i> Berichte</a>
-                    <a class="nav-link" onclick="showView('penalcode')"><i class="fas fa-gavel me-2"></i> Gesetze</a>
-                    <a class="nav-link" onclick="showView('employees')"><i class="fas fa-id-badge me-2"></i> Personal</a>
-                    <hr>
-                    <a class="nav-link text-danger" onclick="logout()"><i class="fas fa-sign-out-alt me-2"></i> Abmelden</a>
-                </nav>
+    <aside class="w-20 lg:w-64 bg-[#0f172a] flex flex-col border-r border-slate-800 z-10 transition-all duration-300">
+        <div class="h-16 flex items-center justify-center lg:justify-start lg:px-6 border-b border-slate-800">
+            <div class="w-8 h-8 bg-current rounded-full flex items-center justify-center text-[#0f172a] font-bold text-xs mr-0 lg:mr-3 header-icon">
+                ★
             </div>
+            <span class="hidden lg:block font-bold text-lg tracking-tight">MDT <span class="text-[var(--accent-color)]">v4.0</span></span>
+        </div>
 
-            <div class="col-md-10 content-area">
+        <nav class="flex-1 py-6 space-y-1">
+            <button onclick="showPage('home')" id="nav-home" class="nav-item w-full p-3 lg:px-6 text-slate-400 hover:text-white hover:bg-slate-800 flex items-center justify-center lg:justify-start transition-all">
+                <span class="text-lg w-6 text-center">🏠</span> <span class="hidden lg:block ml-3 font-semibold">Dashboard</span>
+            </button>
+            <button onclick="showPage('persons')" id="nav-persons" class="nav-item w-full p-3 lg:px-6 text-slate-400 hover:text-white hover:bg-slate-800 flex items-center justify-center lg:justify-start transition-all">
+                <span class="text-lg w-6 text-center">👤</span> <span class="hidden lg:block ml-3 font-semibold">Zivilregister</span>
+            </button>
+            <button onclick="showPage('vehicles')" id="nav-vehicles" class="nav-item w-full p-3 lg:px-6 text-slate-400 hover:text-white hover:bg-slate-800 flex items-center justify-center lg:justify-start transition-all">
+                <span class="text-lg w-6 text-center">🚔</span> <span class="hidden lg:block ml-3 font-semibold">Fahrzeuge</span>
+            </button>
+            <button onclick="showPage('reports')" id="nav-reports" class="nav-item w-full p-3 lg:px-6 text-slate-400 hover:text-white hover:bg-slate-800 flex items-center justify-center lg:justify-start transition-all">
+                <span class="text-lg w-6 text-center">📄</span> <span class="hidden lg:block ml-3 font-semibold">Berichte</span>
+            </button>
+            <div class="my-2 border-t border-slate-800"></div>
+            
+            <button onclick="showPage('calculator')" class="nav-item w-full p-3 lg:px-6 text-slate-400 hover:text-white hover:bg-slate-800 flex items-center justify-center lg:justify-start transition-all">
+                <span class="text-lg w-6 text-center">⚖️</span> <span class="hidden lg:block ml-3 font-semibold">Rechner</span>
+            </button>
+            <button onclick="showPage('court')" class="nav-item judge-only hidden w-full p-3 lg:px-6 text-purple-400 hover:text-purple-300 hover:bg-purple-900/20 flex items-center justify-center lg:justify-start transition-all">
+                <span class="text-lg w-6 text-center">🏛️</span> <span class="hidden lg:block ml-3 font-semibold">Justiz</span>
+            </button>
+            <button onclick="showPage('ia')" class="nav-item ia-only hidden w-full p-3 lg:px-6 text-red-500 hover:text-red-400 hover:bg-red-900/20 flex items-center justify-center lg:justify-start transition-all">
+                <span class="text-lg w-6 text-center">🛡️</span> <span class="hidden lg:block ml-3 font-semibold">Internal Affairs</span>
+            </button>
+            <button onclick="showPage('employees')" class="nav-item command-only hidden w-full p-3 lg:px-6 text-slate-400 hover:text-white hover:bg-slate-800 flex items-center justify-center lg:justify-start transition-all">
+                <span class="text-lg w-6 text-center">👥</span> <span class="hidden lg:block ml-3 font-semibold">Personal</span>
+            </button>
+        </nav>
+
+        <div class="p-4 border-t border-slate-800 bg-[#0b1120]">
+            <div class="flex items-center">
+                <div class="w-8 h-8 rounded bg-slate-700 flex items-center justify-center font-bold" id="user-avatar">?</div>
+                <div class="hidden lg:block ml-3 truncate">
+                    <p class="text-xs font-bold text-white" id="current-user-name">Guest</p>
+                    <p class="text-[10px] text-[var(--accent-color)] uppercase" id="current-rank">Not Logged In</p>
+                </div>
+            </div>
+            <button onclick="location.reload()" class="mt-3 w-full text-[10px] text-slate-500 hover:text-red-400 text-center uppercase">System Logout</button>
+        </div>
+    </aside>
+
+    <main class="flex-1 flex flex-col bg-[#020617] relative overflow-hidden">
+        <header class="h-16 border-b border-slate-800 flex justify-between items-center px-8 bg-[#0f172a]/80 backdrop-blur">
+            <div class="flex items-center text-slate-400 text-xs gap-4">
+                <span id="system-time" class="font-mono text-slate-300">Loading...</span>
+                <span class="px-2 py-0.5 rounded bg-green-900/30 text-green-400 border border-green-900/50">SYSTEM ONLINE</span>
+            </div>
+            <div class="text-[var(--accent-color)] font-bold tracking-widest uppercase text-sm" id="dept-header">
+                SAN ANDREAS DEPARTMENT OF JUSTICE
+            </div>
+        </header>
+
+        <div class="flex-1 overflow-y-auto p-8 relative">
+            
+            <section id="page-home" class="page">
+                <h2 class="text-2xl font-bold mb-6 flex items-center">Dashboard <span class="ml-auto text-xs font-normal text-slate-500">Overview</span></h2>
                 
-                <div id="view-dashboard" class="view-section">
-                    <h2 class="mb-4">Dashboard</h2>
-                    <div class="row g-3">
-                        <div class="col-md-3"><div class="card p-3 text-center pointer" onclick="showView('persons')"><i class="fas fa-search fa-2x mb-2 text-primary"></i><h6>Personenregister</h6></div></div>
-                        <div class="col-md-3"><div class="card p-3 text-center pointer" onclick="showView('vehicles')"><i class="fas fa-car fa-2x mb-2 text-warning"></i><h6>KFZ Datenbank</h6></div></div>
-                        <div class="col-md-3"><div class="card p-3 text-center pointer" onclick="showView('reports')"><i class="fas fa-file-contract fa-2x mb-2 text-success"></i><h6>Berichte</h6></div></div>
-                        <div class="col-md-3"><div class="card p-3 text-center border-danger"><i class="fas fa-exclamation-triangle fa-2x mb-2 text-danger"></i><h6>WANTED LISTE</h6></div></div>
-                    </div>
-                    <div class="card mt-4">
-                        <div class="card-header bg-danger text-white"><i class="fas fa-broadcast-tower"></i> Live Fahndungen</div>
-                        <div class="card-body" id="dashboard-wanteds">Lade...</div>
-                    </div>
-                </div>
-
-                <div id="view-persons" class="view-section hidden">
-                    <div class="d-flex justify-content-between mb-3">
-                        <h2>Personenregister</h2>
-                        <button class="btn btn-success" onclick="openAddPersonModal()"><i class="fas fa-plus"></i> Neue Person</button>
-                    </div>
-                    <div class="input-group mb-4">
-                        <input type="text" id="personSearchInput" class="form-control" placeholder="Name, Telefon...">
-                        <button class="btn btn-primary" onclick="searchPerson()">Suchen</button>
-                    </div>
-                    <div id="person-results" class="row"></div>
-                </div>
-
-                <div id="view-vehicles" class="view-section hidden">
-                    <div class="d-flex justify-content-between mb-3">
-                        <h2>Fahrzeugdatenbank</h2>
-                        <button class="btn btn-success" onclick="openAddVehicleModal()"><i class="fas fa-plus"></i> Fahrzeug Reg.</button>
-                    </div>
-                    <div class="input-group mb-4">
-                        <input type="text" id="vehicleSearchInput" class="form-control" placeholder="Kennzeichen...">
-                        <button class="btn btn-primary" onclick="searchVehicle()">Suchen</button>
-                    </div>
-                    <div id="vehicle-results"></div>
-                </div>
-
-                <div id="view-reports" class="view-section hidden">
-                    <div class="d-flex justify-content-between mb-3">
-                        <h2>Einsatzberichte</h2>
-                        <button class="btn btn-primary" onclick="createNewReport()"><i class="fas fa-plus"></i> Bericht schreiben</button>
-                    </div>
-                    <div id="reports-list" class="row"></div>
-                </div>
-
-                <div id="view-penalcode" class="view-section hidden">
-                    <h2>Strafgesetzbuch (Referenz)</h2>
-                    <input type="text" id="lawSearch" class="form-control mb-3" placeholder="Gesetz suchen..." onkeyup="renderLaws()">
-                    <div id="law-list" class="list-group" style="max-height: 70vh; overflow-y: auto;"></div>
-                </div>
-
-                <div id="view-employees" class="view-section hidden">
-                    <ul class="nav nav-tabs mb-3">
-                        <li class="nav-item"><a class="nav-link active" data-bs-toggle="tab" href="#tab-notes">Notizen</a></li>
-                        <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-roster">Personalverwaltung</a></li>
-                    </ul>
-                    <div class="tab-content">
-                        <div class="tab-pane fade show active" id="tab-notes">
-                            <textarea id="personalNotes" class="form-control" rows="10" placeholder="Privat & Verschlüsselt..."></textarea>
-                            <button class="btn btn-primary mt-2" onclick="saveNotes()">Speichern</button>
+                <div class="grid grid-cols-4 gap-4 mb-8">
+                    <div class="glass-panel p-4 rounded flex items-center justify-between border-l-2 border-red-500">
+                        <div>
+                            <p class="text-[10px] text-slate-400 uppercase">Aktive Wanteds</p>
+                            <p class="text-2xl font-bold font-mono text-white" id="stat-wanted-count">-</p>
                         </div>
-                        <div class="tab-pane fade" id="tab-roster">
-                            <div id="roster-management-area">
-                                <button class="btn btn-success mb-3" onclick="openRegisterUserModal()">Mitarbeiter registrieren</button>
-                                <table class="table table-dark table-striped"><thead><tr><th>Name</th><th>Rang</th><th>Aktion</th></tr></thead><tbody id="roster-table-body"></tbody></table>
+                        <span class="text-2xl opacity-50">🚨</span>
+                    </div>
+                    <div class="glass-panel p-4 rounded flex items-center justify-between border-l-2 border-[var(--accent-color)]">
+                        <div>
+                            <p class="text-[10px] text-slate-400 uppercase">Meine Berichte</p>
+                            <p class="text-2xl font-bold font-mono text-white" id="stat-report-count">-</p>
+                        </div>
+                        <span class="text-2xl opacity-50">📄</span>
+                    </div>
+                    </div>
+
+                <div class="glass-panel rounded overflow-hidden">
+                    <div class="p-4 border-b border-slate-700 flex justify-between items-center bg-red-900/10">
+                        <h3 class="font-bold text-red-500 flex items-center"><span class="animate-pulse w-2 h-2 rounded-full bg-red-500 mr-2"></span> LIVE FAHNDUNG</h3>
+                    </div>
+                    <table class="w-full text-left text-xs">
+                        <thead class="bg-slate-900 text-slate-500 uppercase font-bold">
+                            <tr><th class="p-4">Name / Alias</th><th>Grund</th><th>Ausgestellt am</th><th class="text-right p-4">Akte</th></tr>
+                        </thead>
+                        <tbody id="wanted-list-body" class="divide-y divide-slate-800">
+                            </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <section id="page-persons" class="page hidden">
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-2xl font-bold">Zivilregister</h2>
+                    <button onclick="document.getElementById('modal-person').classList.remove('hidden')" class="btn-primary px-4 py-2 rounded font-bold text-white shadow-lg">+ Person erfassen</button>
+                </div>
+                <div class="glass-panel p-4 rounded mb-6 flex gap-2">
+                    <input type="text" id="search-person-input" onkeyup="searchPerson()" placeholder="Name, Alias oder Telefonnummer..." class="input-field flex-1 p-3 rounded">
+                </div>
+                <div id="person-results" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
+            </section>
+
+            <section id="page-vehicles" class="page hidden">
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-2xl font-bold">Fahrzeugdatenbank</h2>
+                    <button onclick="document.getElementById('modal-vehicle').classList.remove('hidden')" class="btn-primary px-4 py-2 rounded font-bold text-white shadow-lg">+ KFZ Registrieren</button>
+                </div>
+                <div class="glass-panel p-4 rounded mb-6 flex gap-2">
+                    <input type="text" id="search-vehicle-input" onkeyup="searchVehicle()" placeholder="Kennzeichen (z.B. LS-22)..." class="input-field flex-1 p-3 rounded uppercase font-mono">
+                </div>
+                <div id="vehicle-results" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
+            </section>
+
+            <section id="page-reports" class="page hidden">
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-2xl font-bold">Berichtswesen</h2>
+                    <div class="flex gap-2">
+                         <button onclick="filterReports('ALL')" class="bg-slate-800 hover:bg-slate-700 px-3 py-1 rounded text-xs">Alle</button>
+                         <button onclick="filterReports('LSPD')" class="text-blue-400 border border-blue-900 px-3 py-1 rounded text-xs hover:bg-blue-900/30">LSPD</button>
+                         <button onclick="filterReports('LSMS')" class="text-amber-500 border border-amber-900 px-3 py-1 rounded text-xs hover:bg-amber-900/30">LSMS</button>
+                         <button onclick="openReportModal()" class="btn-primary ml-4 px-4 py-2 rounded font-bold text-white shadow-lg">+ Neuer Bericht</button>
+                    </div>
+                </div>
+                <div id="report-list" class="grid grid-cols-1 gap-3"></div>
+            </section>
+
+            <section id="page-calculator" class="page hidden">
+                <h2 class="text-2xl font-bold mb-6">Strafrechner</h2>
+                <div class="grid grid-cols-2 gap-8 h-[calc(100vh-200px)]">
+                    <div class="glass-panel rounded p-4 flex flex-col">
+                        <input type="text" placeholder="Gesetz suchen..." class="input-field w-full p-2 mb-4 rounded text-xs">
+                        <div id="law-list" class="flex-1 overflow-y-auto space-y-1 pr-2">
                             </div>
-                            <div id="roster-denied" class="alert alert-warning hidden">Keine Berechtigung.</div>
+                    </div>
+                    <div class="glass-panel rounded p-6 flex flex-col">
+                        <h3 class="font-bold text-lg mb-4 text-[var(--accent-color)]">Zusammenfassung</h3>
+                        <div id="calc-cart" class="flex-1 overflow-y-auto mb-4 border-b border-slate-700"></div>
+                        <div class="space-y-4">
+                             <div class="flex justify-between text-xl font-bold">
+                                 <span>Gesamtstrafe:</span>
+                                 <span class="font-mono text-green-400" id="calc-total">$0</span>
+                             </div>
+                             <div class="grid grid-cols-2 gap-4">
+                                 <div>
+                                     <label class="text-[10px] uppercase text-slate-500">Haftzeit (Monate)</label>
+                                     <input type="number" id="calc-jail" value="0" class="input-field w-full p-2 rounded">
+                                 </div>
+                                 <div>
+                                     <label class="text-[10px] uppercase text-slate-500">Anpassung (%)</label>
+                                     <input type="number" id="calc-percent" value="100" onchange="updateTotal()" class="input-field w-full p-2 rounded">
+                                 </div>
+                             </div>
+                             <button class="w-full bg-green-600 hover:bg-green-500 text-white py-3 rounded font-bold">Akte erstellen & Senden</button>
                         </div>
                     </div>
                 </div>
-            </div>
-        </div>
-    </div>
+            </section>
 
-    <div class="modal fade" id="addPersonModal" tabindex="-1">
-        <div class="modal-dialog modal-lg">
-            <div class="modal-content bg-dark text-white">
-                <div class="modal-header"><h5 class="modal-title">Person anlegen</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div>
-                <div class="modal-body">
-                    <form id="addPersonForm">
-                        <div class="row">
-                            <div class="col-md-6 mb-2"><label>Vorname</label><input type="text" class="form-control" id="pFirst" required></div>
-                            <div class="col-md-6 mb-2"><label>Nachname</label><input type="text" class="form-control" id="pLast" required></div>
-                            <div class="col-md-4 mb-2"><label>Geburtsdatum</label><input type="date" class="form-control" id="pDob"></div>
-                            <div class="col-md-4 mb-2"><label>Größe</label><input type="number" class="form-control" id="pHeight"></div>
-                            <div class="col-md-4 mb-2"><label>Telefon</label><input type="text" class="form-control" id="pPhone"></div>
-                            <div class="col-md-12 mb-2"><label>Bild URL</label><input type="text" class="form-control" id="pImg"></div>
-                            <div class="col-md-12 mb-2"><label>Adresse</label><input type="text" class="form-control" id="pAddress"></div>
-                            <div class="col-md-12"><label>Tags: </label> <div class="d-flex gap-2"><input type="checkbox" value="Wanted"> Wanted <input type="checkbox" value="Waffenschein"> Waffenschein <input type="checkbox" value="Führerschein"> Führerschein</div></div>
-                        </div>
-                    </form>
-                </div>
-                <div class="modal-footer"><button class="btn btn-primary" onclick="submitNewPerson()">Speichern</button></div>
-            </div>
-        </div>
-    </div>
-
-    <div class="modal fade" id="personDetailModal" tabindex="-1">
-        <div class="modal-dialog modal-xl">
-            <div class="modal-content bg-dark text-white">
-                <div class="modal-header">
-                    <h5 class="modal-title">Personenakte</h5>
-                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body">
-                    <div class="row">
-                        <div class="col-md-3 text-center">
-                            <img id="detail-img" src="" class="img-fluid rounded mb-2">
-                            <h4 id="detail-name"></h4>
-                            <div id="detail-tags" class="mb-2"></div>
-                        </div>
-                        <div class="col-md-9">
-                            <ul class="nav nav-tabs mb-2">
-                                <li class="nav-item"><a class="nav-link active" data-bs-toggle="tab" href="#p-general">Allgemein</a></li>
-                                <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#p-records">Strafregister</a></li>
-                                <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#p-vehicles">Fahrzeuge</a></li>
-                                <li class="nav-item"><a class="nav-link hidden" id="tab-investigation-link" data-bs-toggle="tab" href="#p-investigation">Ermittlungen</a></li>
-                                <li class="nav-item"><a class="nav-link hidden text-danger" id="tab-ia-link" data-bs-toggle="tab" href="#p-ia">Internal Affairs</a></li>
-                            </ul>
-                            <div class="tab-content">
-                                <div class="tab-pane fade show active" id="p-general">
-                                    <p><strong>Geboren:</strong> <span id="detail-dob"></span></p>
-                                    <p><strong>Größe:</strong> <span id="detail-height"></span></p>
-                                    <p><strong>Adresse:</strong> <span id="detail-address"></span></p>
-                                </div>
-                                <div class="tab-pane fade" id="p-records">
-                                    <button class="btn btn-sm btn-danger mb-2" onclick="openRecordModal()">+ Eintrag hinzufügen</button>
-                                    <div id="detail-records-list"></div>
-                                </div>
-                                <div class="tab-pane fade" id="p-vehicles">
-                                    <div id="detail-vehicles-list"></div>
-                                </div>
-                                <div class="tab-pane fade" id="p-investigation">
-                                    <button class="btn btn-sm btn-warning mb-2" onclick="addInvestigation()">+ Neue Ermittlung</button>
-                                    <div id="detail-investigation-list"></div>
-                                </div>
-                                <div class="tab-pane fade" id="p-ia">
-                                    <textarea id="ia-notes" class="form-control" rows="5"></textarea>
-                                    <button class="btn btn-danger mt-2" onclick="saveIA()">IA Update</button>
-                                </div>
-                            </div>
+            <section id="page-employees" class="page hidden">
+                <h2 class="text-2xl font-bold mb-6">Personalverwaltung</h2>
+                <div class="grid grid-cols-3 gap-6">
+                    <div class="col-span-2 glass-panel p-6 rounded">
+                        <div id="employee-list" class="space-y-2"></div>
+                    </div>
+                    <div class="glass-panel p-6 rounded h-fit border-t-2 border-[var(--accent-color)]">
+                        <h3 class="font-bold mb-4 text-[var(--accent-color)]">Beamten registrieren</h3>
+                        <div class="space-y-3">
+                            <input type="text" id="m-user" placeholder="Username" class="input-field w-full p-2 rounded">
+                            <input type="password" id="m-pass" placeholder="Password" class="input-field w-full p-2 rounded">
+                            <select id="m-dept" class="input-field w-full p-2 rounded">
+                                <option value="LSPD">LSPD</option>
+                                <option value="MARSHAL">Marshal</option>
+                                <option value="DOJ">DOJ</option>
+                            </select>
+                            <select id="m-rank" class="input-field w-full p-2 rounded">
+                                <option value="LSPD Officer">Officer</option>
+                                <option value="Sergeant">Sergeant</option>
+                                <option value="LSPD Command">LSPD Command</option>
+                                <option value="Marshal Deputy">Marshal Deputy</option>
+                                <option value="Attorney General">Admin (AG)</option>
+                            </select>
+                            <button onclick="uiRegisterEmployee()" class="w-full btn-primary py-2 rounded font-bold text-white mt-2">Anlegen</button>
                         </div>
                     </div>
                 </div>
+            </section>
+            
+            <section id="page-court" class="page hidden">
+                <div id="court-record-list" class="space-y-2"></div>
+                <button onclick="openCourtModal()" class="mt-4 bg-purple-600 px-4 py-2 rounded text-white font-bold">Neue Gerichtsakte</button>
+            </section>
+
+             <section id="page-ia" class="page hidden">
+                 <h2 class="text-red-500 font-bold text-2xl mb-4">INTERNAL AFFAIRS BUREAU</h2>
+                 <div id="ia-case-list" class="space-y-2"></div>
+                 <button onclick="openIAModal()" class="mt-4 bg-red-600 px-4 py-2 rounded text-white font-bold">Neue Ermittlung</button>
+            </section>
+
+        </div>
+    </main>
+
+    <div id="modal-person" class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm hidden">
+        <div class="glass-panel p-8 w-[600px] rounded-lg border border-slate-600 shadow-2xl">
+            <h2 class="text-xl font-bold mb-6 border-b border-slate-700 pb-2">Person erfassen</h2>
+            <div class="grid grid-cols-2 gap-4 mb-4">
+                <input id="p-firstname" type="text" placeholder="Vorname" class="input-field p-2 rounded">
+                <input id="p-lastname" type="text" placeholder="Nachname" class="input-field p-2 rounded">
+                <input id="p-dob" type="date" class="input-field p-2 rounded text-slate-400">
+                <input id="p-height" type="number" placeholder="Größe (cm)" class="input-field p-2 rounded">
+            </div>
+            <label class="text-xs uppercase text-slate-500 font-bold mb-2 block">Lizenzen & Status</label>
+            <div class="flex flex-wrap gap-2 mb-6" id="tag-container">
+                <button onclick="toggleTag(this)" data-tag="Wanted" class="tag-btn border border-red-900 text-red-500 px-3 py-1 rounded text-xs hover:bg-red-900/50 transition">WANTED</button>
+                <button onclick="toggleTag(this)" data-tag="Driver A" class="tag-btn border border-slate-600 text-slate-400 px-3 py-1 rounded text-xs hover:bg-slate-700 transition">Drive A</button>
+                <button onclick="toggleTag(this)" data-tag="Driver B" class="tag-btn border border-slate-600 text-slate-400 px-3 py-1 rounded text-xs hover:bg-slate-700 transition">Drive B</button>
+                <button onclick="toggleTag(this)" data-tag="Weapons" class="tag-btn border border-slate-600 text-slate-400 px-3 py-1 rounded text-xs hover:bg-slate-700 transition">Weapon Lic</button>
+            </div>
+            <div class="flex justify-end gap-3">
+                <button onclick="closeModal()" class="text-slate-400 hover:text-white">Abbrechen</button>
+                <button onclick="savePerson()" class="btn-primary px-6 py-2 rounded font-bold text-white">Speichern</button>
             </div>
         </div>
     </div>
 
-    <div class="modal fade" id="penalCodeModal" tabindex="-1">
-        <div class="modal-dialog modal-xl">
-            <div class="modal-content bg-dark text-white">
-                <div class="modal-header"><h5 class="modal-title">Strafrechner & Eintrag</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div>
-                <div class="modal-body">
-                    <div class="row">
-                        <div class="col-md-7 border-end border-secondary">
-                            <input type="text" id="modalLawSearch" class="form-control mb-3" placeholder="Gesetz suchen..." onkeyup="renderModalLaws()">
-                            <div id="modal-law-list" class="list-group" style="height: 400px; overflow-y: auto;"></div>
-                        </div>
-                        <div class="col-md-5">
-                            <h6>Ausgewählt:</h6>
-                            <ul id="modal-selected-laws" class="list-group mb-3"></ul>
-                            <label>Haftminderung / Anpassung (%)</label>
-                            <input type="range" class="form-range" id="modalFineAdj" min="0" max="100" value="100" oninput="updateModalCalc()">
-                            <div class="text-end" id="modalAdjText">100%</div>
-                            <div class="card bg-secondary mb-3"><div class="card-body"><h3><span id="modalTotalFine">$0</span> | <span id="modalTotalJail">0 Mon.</span></h3></div></div>
-                            <textarea id="modalRecordNote" class="form-control" rows="2" placeholder="Notiz..."></textarea>
-                        </div>
-                    </div>
+    <div id="modal-vehicle" class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm hidden">
+        <div class="glass-panel p-8 w-[500px] rounded-lg border border-slate-600 shadow-2xl">
+            <h2 class="text-xl font-bold mb-6">Fahrzeug registrieren</h2>
+            <div class="space-y-4">
+                <input id="v-plate" type="text" placeholder="KENNZEICHEN" class="input-field w-full p-3 rounded font-mono uppercase text-lg">
+                <input id="v-model" type="text" placeholder="Modell (z.B. Buffalo)" class="input-field w-full p-2 rounded">
+                <input id="v-color" type="text" placeholder="Farbe" class="input-field w-full p-2 rounded">
+                <div class="relative">
+                    <input id="v-owner-search" onkeyup="liveSearchOwner(this.value)" type="text" placeholder="Besitzer suchen..." class="input-field w-full p-2 rounded">
+                    <div id="owner-dropdown" class="absolute w-full bg-slate-800 border border-slate-700 rounded mt-1 hidden max-h-40 overflow-y-auto z-10 shadow-xl"></div>
                 </div>
-                <div class="modal-footer"><button class="btn btn-danger" onclick="submitRecordFromModal()">Speichern & Signieren</button></div>
+                <div id="selected-owner-display" class="text-[var(--accent-color)] font-bold text-sm"></div>
+                <input type="hidden" id="v-owner-id">
+            </div>
+            <div class="flex justify-end gap-3 mt-6">
+                <button onclick="closeModal()" class="text-slate-400 hover:text-white">Abbrechen</button>
+                <button onclick="saveVehicle()" class="btn-primary px-6 py-2 rounded font-bold text-white">Registrieren</button>
             </div>
         </div>
     </div>
 
-    <div class="modal fade" id="addVehicleModal" tabindex="-1">
-        <div class="modal-dialog">
-            <div class="modal-content bg-dark text-white">
-                <div class="modal-header"><h5 class="modal-title">Fahrzeug Registrieren</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div>
-                <div class="modal-body">
-                    <input type="text" id="vPlate" class="form-control mb-2" placeholder="Kennzeichen" style="text-transform: uppercase;">
-                    <input type="text" id="vModel" class="form-control mb-2" placeholder="Modell">
-                    <input type="text" id="vColor" class="form-control mb-2" placeholder="Farbe">
-                    <input type="text" id="vOwner" class="form-control mb-2" placeholder="Besitzer (Vorname Nachname)">
+    <div id="modal-report" class="fixed inset-0 z-[60] flex items-center justify-center bg-black/90 hidden">
+        <div id="report-card-visual" class="glass-panel p-8 w-[800px] max-h-[95vh] flex flex-col border-t-4 transition-colors">
+            <div class="flex justify-between items-center mb-4 border-b border-slate-700 pb-2">
+                 <h3 class="text-xl font-bold uppercase" id="r-header-title">EINSATZPROTOKOLL</h3>
+                 <span id="r-id-preview" class="font-mono text-sm bg-slate-900 px-2 py-1 rounded border border-slate-700 text-slate-300">ID...</span>
+            </div>
+            <div class="space-y-4 flex-1 overflow-y-auto">
+                <input type="text" id="r-subject" placeholder="Betreff" class="input-field w-full p-2 rounded font-bold">
+                <div class="grid grid-cols-2 gap-4">
+                    <input type="text" id="r-officers" placeholder="Beamte" class="input-field p-2 rounded">
+                    <input type="text" id="r-location" placeholder="Ort" class="input-field p-2 rounded">
                 </div>
-                <div class="modal-footer"><button class="btn btn-success" onclick="submitNewVehicle()">Registrieren</button></div>
+                <textarea id="r-content" class="input-field w-full p-3 rounded h-60 font-mono text-sm leading-relaxed"></textarea>
+            </div>
+            <div class="flex justify-end gap-3 mt-4">
+                <button onclick="closeModal()" class="text-slate-400">Schließen</button>
+                <button onclick="saveReport()" class="btn-primary px-6 py-2 rounded font-bold text-white">Archivieren</button>
             </div>
         </div>
     </div>
 
-    <div class="modal fade" id="registerUserModal" tabindex="-1">
-        <div class="modal-dialog">
-            <div class="modal-content bg-dark text-white">
-                <div class="modal-header"><h5 class="modal-title">Mitarbeiter Einstellen</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div>
-                <div class="modal-body">
-                    <input type="text" id="regUser" class="form-control mb-2" placeholder="Vorname.Nachname">
-                    <input type="password" id="regPass" class="form-control mb-2" placeholder="Passwort">
-                    <select id="regRank" class="form-select mb-2"></select>
-                    <div class="form-check"><input class="form-check-input" type="checkbox" id="autoCreateCiv" checked><label>Zivilakte anlegen</label></div>
-                </div>
-                <div class="modal-footer"><button class="btn btn-success" onclick="processRegistration()">Registrieren</button></div>
-            </div>
-        </div>
-    </div>
-
-    <div class="modal fade" id="reportModal" tabindex="-1">
-        <div class="modal-dialog modal-lg">
-            <div class="modal-content bg-dark text-white">
-                <div class="modal-header"><h5 class="modal-title">Bericht verfassen</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div>
-                <div class="modal-body">
-                    <div class="mb-2"><button class="btn btn-sm btn-outline-info" onclick="setRepTemplate('standard')">Standard</button> <button class="btn btn-sm btn-outline-warning" onclick="setRepTemplate('arrest')">Festnahme</button></div>
-                    <input type="text" id="repTitle" class="form-control mb-2" placeholder="Titel">
-                    <textarea id="repContent" class="form-control" rows="10"></textarea>
-                </div>
-                <div class="modal-footer"><button class="btn btn-primary" onclick="submitReport()">Absenden</button></div>
-            </div>
-        </div>
-    </div>
-
-    <div class="modal fade" id="investigationDetailModal" tabindex="-1">
-        <div class="modal-dialog modal-lg">
-            <div class="modal-content bg-dark text-white">
-                <div class="modal-header"><h5 class="modal-title">Ermittlungsakte</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div>
-                <div class="modal-body">
-                    <h4 id="invDetailTitle" class="text-warning"></h4>
-                    <select id="invDetailStatus" class="form-select bg-secondary text-white border-0 mb-3"><option>Offen</option><option>Geschlossen</option><option>Vor Gericht</option></select>
-                    <textarea id="invDetailNotes" class="form-control" rows="10"></textarea>
-                </div>
-                <div class="modal-footer"><button class="btn btn-primary" onclick="saveInvestigationDetails()">Speichern</button></div>
-            </div>
-        </div>
-    </div>
-
-    <div class="modal fade" id="globalMessageModal" tabindex="-1" style="z-index: 1060;"><div class="modal-dialog"><div class="modal-content bg-dark text-white"><div class="modal-header"><h5 class="modal-title" id="msgTitle">Info</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div><div class="modal-body" id="msgBody"></div><div class="modal-footer"><button class="btn btn-primary" data-bs-dismiss="modal">OK</button></div></div></div></div>
+    <div id="modal-court" class="fixed inset-0 z-[70] hidden flex items-center justify-center bg-black/80"><div class="glass-panel p-8 w-[600px] border-t-4 border-purple-500"><h2 class="font-bold mb-4">Gerichtsakte</h2><input id="c-title" class="input-field w-full mb-2" placeholder="Titel"><textarea id="c-decision" class="input-field w-full h-32 mb-4" placeholder="Urteil"></textarea><select id="c-status" class="input-field w-full mb-4"><option value="OPEN">OPEN</option><option value="CLOSED">CLOSED</option></select><div class="flex justify-end"><button onclick="closeModal()" class="mr-4 text-slate-400">Abbruch</button><button onclick="saveCourtRecord()" class="bg-purple-600 px-4 py-2 rounded text-white font-bold">Speichern</button></div></div></div>
     
-    <div class="modal fade" id="globalInputModal" tabindex="-1" style="z-index: 1060;"><div class="modal-dialog"><div class="modal-content bg-dark text-white"><div class="modal-header"><h5 id="inputTitle">Eingabe</h5><button class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div><div class="modal-body"><label id="inputLabel"></label><input type="text" id="globalInputValue" class="form-control"></div><div class="modal-footer"><button class="btn btn-success" id="btnInputConfirm">Bestätigen</button></div></div></div></div>
+    <div id="modal-ia" class="fixed inset-0 z-[70] hidden flex items-center justify-center bg-black/80"><div class="glass-panel p-8 w-[600px] border-t-4 border-red-500"><h2 class="font-bold mb-4 text-red-500">IA Fall</h2><input id="ia-target" class="input-field w-full mb-2" placeholder="Beamter"><textarea id="ia-reason" class="input-field w-full h-32 mb-4" placeholder="Vorwurf"></textarea><div class="flex justify-end"><button onclick="closeModal()" class="mr-4 text-slate-400">Abbruch</button><button onclick="saveIACase()" class="bg-red-600 px-4 py-2 rounded text-white font-bold">Speichern</button></div></div></div>
 
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-
+    <script src="app.js"></script>
     <script>
-        // --- 1. CONFIG ---
-        const firebaseConfig = {
-            // HIER DEINE CONFIG EINFÜGEN!
-            apiKey: "AIzaSyD6I01je_MrT7KzeFE7BD1IGc4amukK_6Q",
-  authDomain: "mdt-system-c18ea.firebaseapp.com",
-  projectId: "mdt-system-c18ea",
-  storageBucket: "mdt-system-c18ea.firebasestorage.app",
-  messagingSenderId: "548167432149",
-  appId: "1:548167432149:web:be1a0154c825faca622f5c"
-        };
-
-        if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
-        const auth = firebase.auth();
-        const db = firebase.firestore();
-
-        // --- 2. DATA MODELS ---
-        const ROLES = {
-            "LSPD Officer": { dept: "LSPD", lvl: 1, canSeeInv: false, canManage: [] },
-            "LSPD Detective": { dept: "LSPD", lvl: 2, canSeeInv: true, canManage: [] },
-            "LSPD Sergeant": { dept: "LSPD", lvl: 3, canSeeInv: true, canManage: [] },
-            "LSPD Command": { dept: "LSPD", lvl: 4, canSeeInv: true, canManage: ["LSPD Officer", "LSPD Detective", "LSPD Sergeant"] },
-            "Marshal Officer": { dept: "MARSHAL", lvl: 1, canSeeInv: false, canManage: [] },
-            "Marshal Deputy": { dept: "MARSHAL", lvl: 2, canSeeInv: true, canManage: [] },
-            "Marshal Command": { dept: "MARSHAL", lvl: 4, canSeeInv: true, canManage: ["Marshal Officer", "Marshal Deputy"] },
-            "Attorney": { dept: "DOJ", lvl: 1, canSeeInv: true, canManage: [], readOnly: true },
-            "District Attorney": { dept: "DOJ", lvl: 3, canSeeInv: true, canManage: ["Attorney"], readOnly: true },
-            "Judge": { dept: "COURT", lvl: 3, canSeeInv: true, canManage: [], canDelete: true },
-            "Chief Justice": { dept: "COURT", lvl: 4, canSeeInv: true, canManage: ["Judge"], canDelete: true },
-            "Attorney General": { dept: "ADMIN", lvl: 5, canSeeInv: true, canManage: "ALL", canDelete: true, seeIA: true }
-        };
-
-        const penalCodeDB = [
-            { id: "§1", de: "Geschwindigkeitsüberschreitung", fine: 500, months: 0 },
-            { id: "§2", de: "Fahren ohne Fahrerlaubnis", fine: 2000, months: 0 },
-            { id: "§3", de: "Raubüberfall", fine: 5000, months: 20 },
-            { id: "§4", de: "Mord", fine: 50000, months: 100 },
-            { id: "§5", de: "Drogenbesitz", fine: 1500, months: 5 }
-        ];
-
-        let currentUser = null;
-        let currentPersonId = null;
-        let currentInvId = null;
-        let modalSelectedLaws = [];
-
-        // --- 3. AUTH SYSTEM ---
-        const emailDomain = "@mdt.com";
-
-        document.getElementById('loginForm').addEventListener('submit', (e) => {
-            e.preventDefault();
-            let rawUser = document.getElementById('loginUser').value;
-            let cleanUser = rawUser.trim().toLowerCase().replace(/\s+/g, '.') + emailDomain;
-            let pass = document.getElementById('loginPass').value;
-            
-            auth.signInWithEmailAndPassword(cleanUser, pass).catch(err => {
-                document.getElementById('loginError').innerText = err.message;
-            });
-        });
-
-        auth.onAuthStateChanged(async (user) => {
-            if (user) {
-                const doc = await db.collection('employees').doc(user.uid).get();
-                if (doc.exists) {
-                    const data = doc.data();
-                    currentUser = { uid: user.uid, ...data, roleInfo: ROLES[data.rank] || ROLES["LSPD Officer"] };
-                    initMDT();
-                } else {
-                    // Emergency Admin Hack (nur wenn leer)
-                     if(user.email.includes("admin")) {
-                         currentUser = { uid: user.uid, username: "Admin", rank: "Attorney General", roleInfo: ROLES["Attorney General"] };
-                         initMDT();
-                    } else { alert("User not in DB"); auth.signOut(); }
-                }
-            } else {
-                document.getElementById('login-screen').style.display = 'flex';
-                document.getElementById('mdt-app').style.display = 'none';
-            }
-        });
-
-        function logout() { auth.signOut(); window.location.reload(); }
-
-        // --- 4. NAVIGATION ---
-        function initMDT() {
-            document.getElementById('login-screen').style.display = 'none';
-            document.getElementById('mdt-app').style.display = 'block';
-            document.getElementById('currentUserDisplay').innerText = currentUser.username;
-            document.getElementById('currentRankDisplay').innerText = currentUser.rank;
-            loadLiveWanteds();
-            showView('dashboard');
-        }
-
-        function showView(viewId) {
-            document.querySelectorAll('.view-section').forEach(el => el.classList.add('hidden'));
-            document.getElementById('view-' + viewId).classList.remove('hidden');
-            if(viewId === 'penalcode') renderLaws();
-            if(viewId === 'employees') loadEmployeeArea();
-            if(viewId === 'reports') loadReports();
-        }
-
-        // --- 5. HELPERS (Modal, Input, Msg) ---
-        function showMsg(title, text) {
-            document.getElementById('msgTitle').innerText = title;
-            document.getElementById('msgBody').innerText = text;
-            new bootstrap.Modal(document.getElementById('globalMessageModal')).show();
-        }
-
-        function showInput(title, label, callback) {
-            document.getElementById('inputTitle').innerText = title;
-            document.getElementById('inputLabel').innerText = label;
-            document.getElementById('globalInputValue').value = "";
-            const modalEl = document.getElementById('globalInputModal');
-            const modal = new bootstrap.Modal(modalEl);
-            const btn = document.getElementById('btnInputConfirm');
-            const newBtn = btn.cloneNode(true); // Remove old listeners
-            btn.parentNode.replaceChild(newBtn, btn);
-            newBtn.addEventListener('click', () => {
-                const val = document.getElementById('globalInputValue').value;
-                if(val) { callback(val); modal.hide(); }
-            });
-            modal.show();
-        }
-
-        // --- 6. PERSONS LOGIC ---
-        function openAddPersonModal() { new bootstrap.Modal(document.getElementById('addPersonModal')).show(); }
-
-        async function submitNewPerson() {
-            const tags = Array.from(document.querySelectorAll('#addPersonForm input[type=checkbox]:checked')).map(e => e.value);
-            const p = {
-                firstName: document.getElementById('pFirst').value,
-                lastName: document.getElementById('pLast').value,
-                dob: document.getElementById('pDob').value,
-                height: document.getElementById('pHeight').value,
-                phone: document.getElementById('pPhone').value,
-                img: document.getElementById('pImg').value || "https://placehold.co/150/1e1e1e/white?text=No+Image",
-                address: document.getElementById('pAddress').value,
-                tags: tags,
-                internalAffairs: "",
-                createdAt: firebase.firestore.FieldValue.serverTimestamp()
-            };
-            await db.collection('civilians').add(p);
-            bootstrap.Modal.getInstance(document.getElementById('addPersonModal')).hide();
-            showMsg("Erfolg", "Person angelegt");
-            searchPerson();
-        }
-
-        async function searchPerson() {
-            const query = document.getElementById('personSearchInput').value.toLowerCase();
-            const res = document.getElementById('person-results');
-            res.innerHTML = "Suche...";
-            const snap = await db.collection('civilians').get(); // In Prod: Use Index Search
-            res.innerHTML = "";
-            snap.forEach(doc => {
-                const p = doc.data();
-                const full = `${p.firstName} ${p.lastName}`.toLowerCase();
-                if(full.includes(query) || (p.phone && p.phone.includes(query))) {
-                    const w = p.tags.includes("Wanted") ? '<span class="badge badge-wanted">WANTED</span>' : '';
-                    res.innerHTML += `<div class="col-md-4 mb-3"><div class="card h-100"><div class="card-body"><h5 class="card-title">${p.firstName} ${p.lastName} ${w}</h5><button class="btn btn-sm btn-primary" onclick="openPersonFile('${doc.id}')">Akte</button></div></div></div>`;
-                }
-            });
-        }
-
-        async function openPersonFile(id) {
-            currentPersonId = id;
-            const doc = await db.collection('civilians').doc(id).get();
-            if(!doc.exists) return;
-            const p = doc.data();
-            
-            document.getElementById('detail-name').innerText = p.firstName + " " + p.lastName;
-            document.getElementById('detail-dob').innerText = p.dob;
-            document.getElementById('detail-height').innerText = p.height + " cm";
-            document.getElementById('detail-address').innerText = p.address;
-            document.getElementById('detail-img').src = p.img;
-
-            renderTagsInModal(p.tags, id);
-
-            const r = currentUser.roleInfo;
-            // Tabs Permissions
-            if(r.canSeeInv) document.getElementById('tab-investigation-link').classList.remove('hidden');
-            if(r.seeIA) {
-                document.getElementById('tab-ia-link').classList.remove('hidden');
-                document.getElementById('ia-notes').value = p.internalAffairs || "";
-            }
-
-            // Delete Button (Header)
-            const header = document.querySelector('#personDetailModal .modal-header');
-            const oldBtn = document.getElementById('btnDeletePerson');
-            if(oldBtn) oldBtn.remove();
-            if(r.canDelete || r.lvl >= 5) {
-                const delBtn = document.createElement('button');
-                delBtn.id = "btnDeletePerson"; delBtn.className = "btn btn-danger btn-sm ms-auto";
-                delBtn.innerHTML = '<i class="fas fa-trash"></i>';
-                delBtn.onclick = () => deletePersonComplete(id);
-                header.appendChild(delBtn);
-            }
-
-            // Sub Loads
-            loadPersonRecords(id);
-            loadPersonVehicles(id);
-            if(r.canSeeInv) loadPersonInvestigations(id);
-
-            new bootstrap.Modal(document.getElementById('personDetailModal')).show();
-        }
-
-        function renderTagsInModal(tags, id) {
-            const div = document.getElementById('detail-tags');
-            if(!tags || !tags.length) { div.innerHTML = "<small>Keine Tags</small>"; return; }
-            let html = "";
-            tags.forEach(t => {
-                let col = t === "Wanted" ? "bg-danger" : "bg-secondary";
-                html += `<span class="badge ${col} me-1 pointer" onclick="deleteTag('${id}','${t}')">${t} &times;</span>`;
-            });
-            div.innerHTML = html;
-        }
-
-        async function deleteTag(pid, tag) {
-            await db.collection('civilians').doc(pid).update({ tags: firebase.firestore.FieldValue.arrayRemove(tag) });
-            const d = await db.collection('civilians').doc(pid).get();
-            renderTagsInModal(d.data().tags, pid);
-        }
-
-        async function deletePersonComplete(id) {
-            showInput("LÖSCHEN", "Bestätige mit 'DELETE':", async (val) => {
-                if(val === "DELETE") {
-                    await db.collection('civilians').doc(id).delete();
-                    bootstrap.Modal.getInstance(document.getElementById('personDetailModal')).hide();
-                    searchPerson();
-                    showMsg("Gelöscht", "Akte entfernt.");
-                }
-            });
-        }
-
-        // --- 7. RECORDS (PENAL CODE) LOGIC ---
-        async function loadPersonRecords(id) {
-            const list = document.getElementById('detail-records-list');
-            list.innerHTML = "Lade...";
-            const snap = await db.collection('civilians').doc(id).collection('records').orderBy('date', 'desc').get();
-            list.innerHTML = "";
-            const canDel = currentUser.roleInfo.canDelete;
-
-            snap.forEach(doc => {
-                const r = doc.data();
-                let delBtn = canDel ? `<button class="btn btn-sm btn-outline-danger float-end" onclick="deleteRecord('${id}','${doc.id}')">&times;</button>` : '';
-                list.innerHTML += `<div class="alert alert-dark border-secondary p-2 mb-1">${delBtn}<strong>${r.reason}</strong><br><small>$${r.fine} | ${r.jail} Mon. | ${r.officer}</small></div>`;
-            });
-        }
-
-        async function deleteRecord(pid, rid) {
-            if(confirm("Eintrag löschen?")) {
-                await db.collection('civilians').doc(pid).collection('records').doc(rid).delete();
-                loadPersonRecords(pid);
-            }
-        }
-
-        // New Modal Calculator Logic
-        function openRecordModal() {
-            modalSelectedLaws = [];
-            document.getElementById('modalLawSearch').value = "";
-            document.getElementById('modalRecordNote').value = "";
-            document.getElementById('modalFineAdj').value = 100;
-            renderModalLaws();
-            updateModalCalc();
-            new bootstrap.Modal(document.getElementById('penalCodeModal')).show();
-        }
-
-        function renderModalLaws() {
-            const list = document.getElementById('modal-law-list');
-            const q = document.getElementById('modalLawSearch').value.toLowerCase();
-            list.innerHTML = "";
-            penalCodeDB.forEach(l => {
-                if(l.de.toLowerCase().includes(q) || l.id.toLowerCase().includes(q)) {
-                    list.innerHTML += `<button class="list-group-item bg-dark text-white list-group-item-action border-secondary" onclick="addLawToModal('${l.id}')"><b>${l.id}</b> ${l.de} <span class="badge bg-secondary float-end">$${l.fine}</span></button>`;
-                }
-            });
-        }
-
-        function addLawToModal(id) { modalSelectedLaws.push(penalCodeDB.find(l => l.id === id)); updateModalCalc(); }
-        
-        function updateModalCalc() {
-            const list = document.getElementById('modal-selected-laws');
-            const perc = parseInt(document.getElementById('modalFineAdj').value);
-            document.getElementById('modalAdjText').innerText = perc + "%";
-            list.innerHTML = "";
-            let f = 0, j = 0;
-            modalSelectedLaws.forEach((l, i) => {
-                f += l.fine; j += l.months;
-                list.innerHTML += `<li class="list-group-item bg-dark text-white p-1 d-flex justify-content-between"><small>${l.de}</small><i class="fas fa-times text-danger pointer" onclick="modalSelectedLaws.splice(${i},1);updateModalCalc()"></i></li>`;
-            });
-            const finalF = (f * perc) / 100;
-            document.getElementById('modalTotalFine').innerText = "$" + finalF;
-            document.getElementById('modalTotalJail').innerText = j + " Mon.";
-        }
-
-        async function submitRecordFromModal() {
-            if(!modalSelectedLaws.length) return alert("Kein Gesetz gewählt");
-            const note = document.getElementById('modalRecordNote').value;
-            const perc = parseInt(document.getElementById('modalFineAdj').value);
-            let f = 0, j = 0, names = [];
-            modalSelectedLaws.forEach(l => { f+=l.fine; j+=l.months; names.push(l.de); });
-            const finalF = (f * perc) / 100;
-            const reason = names.join(', ') + (note ? " | " + note : "");
-
-            await db.collection('civilians').doc(currentPersonId).collection('records').add({
-                reason: reason, fine: finalF, jail: j, officer: currentUser.username, date: firebase.firestore.FieldValue.serverTimestamp()
-            });
-            bootstrap.Modal.getInstance(document.getElementById('penalCodeModal')).hide();
-            loadPersonRecords(currentPersonId);
-        }
-
-        // --- 8. VEHICLE LOGIC ---
-        function openAddVehicleModal() { new bootstrap.Modal(document.getElementById('addVehicleModal')).show(); }
-
-        async function submitNewVehicle() {
-            const plate = document.getElementById('vPlate').value.toUpperCase();
-            const owner = document.getElementById('vOwner').value;
-            let oid = "UNKNOWN";
-            // Try find owner
-            const parts = owner.split(' ');
-            if(parts.length > 1) {
-                const s = await db.collection('civilians').where('firstName','==',parts[0]).where('lastName','==',parts[1]).limit(1).get();
-                if(!s.empty) oid = s.docs[0].id;
-            }
-            await db.collection('vehicles').add({ plate: plate, model: document.getElementById('vModel').value, color: document.getElementById('vColor').value, owner: owner, ownerId: oid, createdAt: firebase.firestore.FieldValue.serverTimestamp() });
-            bootstrap.Modal.getInstance(document.getElementById('addVehicleModal')).hide();
-            showMsg("OK", "Fahrzeug gespeichert");
-            if(document.getElementById('view-vehicles').classList.contains('hidden') === false) searchVehicle();
-        }
-
-        async function searchVehicle() {
-            const q = document.getElementById('vehicleSearchInput').value.toUpperCase();
-            const r = document.getElementById('vehicle-results');
-            r.innerHTML = "Suche...";
-            let ref = db.collection('vehicles');
-            if(q) ref = ref.where('plate', '>=', q).where('plate', '<=', q + '\uf8ff');
-            else ref = ref.limit(10);
-            
-            const snap = await ref.get();
-            r.innerHTML = "";
-            snap.forEach(d => {
-                const v = d.data();
-                let btn = v.ownerId !== "UNKNOWN" ? `<button class="btn btn-sm btn-primary" onclick="openPersonFile('${v.ownerId}')">Halter Akte</button>` : '';
-                r.innerHTML += `<div class="alert alert-dark border-secondary d-flex justify-content-between"><div><h4>${v.plate}</h4>${v.model} (${v.color})<br><small>Halter: ${v.owner}</small></div><div>${btn}</div></div>`;
-            });
-        }
-
-        async function loadPersonVehicles(pid) {
-            const list = document.getElementById('detail-vehicles-list');
-            list.innerHTML = "Lade...";
-            const snap = await db.collection('vehicles').where('ownerId', '==', pid).get();
-            list.innerHTML = "";
-            if(snap.empty) list.innerHTML = "<small class='text-muted'>Keine Fahrzeuge.</small>";
-            snap.forEach(d => {
-                const v = d.data();
-                list.innerHTML += `<div class="p-2 border border-secondary rounded mb-1 bg-dark"><strong class="text-warning">${v.plate}</strong> ${v.model}</div>`;
-            });
-        }
-
-        // --- 9. INVESTIGATIONS LOGIC ---
-        function addInvestigation() {
-            showInput("Ermittlung", "Titel:", async (val) => {
-                await db.collection('civilians').doc(currentPersonId).collection('investigations').add({
-                    title: val, status: "Offen", officer: currentUser.username, notes: "", date: firebase.firestore.FieldValue.serverTimestamp()
-                });
-                loadPersonInvestigations(currentPersonId);
-            });
-        }
-
-        async function loadPersonInvestigations(pid) {
-            const list = document.getElementById('detail-investigation-list');
-            list.innerHTML = "...";
-            const snap = await db.collection('civilians').doc(pid).collection('investigations').orderBy('date','desc').get();
-            list.innerHTML = "";
-            snap.forEach(doc => {
-                const d = doc.data();
-                list.innerHTML += `<div class="alert alert-dark border-secondary d-flex justify-content-between"><div><span class="badge bg-primary">${d.status}</span> <strong>${d.title}</strong></div><button class="btn btn-sm btn-info" onclick="openInvestigationDetail('${doc.id}')">Öffnen</button></div>`;
-            });
-        }
-
-        async function openInvestigationDetail(iid) {
-            currentInvId = iid;
-            const d = (await db.collection('civilians').doc(currentPersonId).collection('investigations').doc(iid).get()).data();
-            document.getElementById('invDetailTitle').innerText = d.title;
-            document.getElementById('invDetailStatus').value = d.status;
-            document.getElementById('invDetailNotes').value = d.notes;
-            new bootstrap.Modal(document.getElementById('investigationDetailModal')).show();
-        }
-
-        async function saveInvestigationDetails() {
-            await db.collection('civilians').doc(currentPersonId).collection('investigations').doc(currentInvId).update({
-                status: document.getElementById('invDetailStatus').value,
-                notes: document.getElementById('invDetailNotes').value
-            });
-            showMsg("OK", "Gespeichert");
-            loadPersonInvestigations(currentPersonId);
-        }
-
-        // --- 10. REPORTS LOGIC ---
-        function createNewReport() {
-            document.getElementById('repTitle').value = ""; document.getElementById('repContent').value = "";
-            new bootstrap.Modal(document.getElementById('reportModal')).show();
-        }
-
-        function setRepTemplate(t) {
-            const a = document.getElementById('repContent');
-            if(t==='standard') a.value = "SITUATION:\n\nBETEILIGTE:\n\nABLAUF:\n";
-            if(t==='arrest') a.value = "GRUND:\n\nVERDÄCHTIGER:\n\nMIRANDA:\n[ ] JA\n\nITEMS:\n";
-        }
-
-        async function submitReport() {
-            const t = document.getElementById('repTitle').value;
-            const c = document.getElementById('repContent').value;
-            if(!t || !c) return alert("Bitte ausfüllen");
-            
-            let pre = currentUser.roleInfo.dept === "LSPD" ? "LSPD" : (currentUser.roleInfo.dept === "MARSHAL" ? "LSMS" : "GEN");
-            const snap = await db.collection('reports').get();
-            const id = `${pre}-${(snap.size + 1).toString().padStart(3,'0')}`;
-
-            await db.collection('reports').add({ reportId: id, title: t, content: c, author: currentUser.username, dept: currentUser.roleInfo.dept, date: firebase.firestore.FieldValue.serverTimestamp() });
-            bootstrap.Modal.getInstance(document.getElementById('reportModal')).hide();
-            showMsg("Erfolg", "Bericht " + id + " erstellt.");
-            loadReports();
-        }
-
-        async function loadReports() {
-            const div = document.getElementById('reports-list');
-            div.innerHTML = "Lade...";
-            const s = await db.collection('reports').orderBy('date', 'desc').get();
-            div.innerHTML = "";
-            s.forEach(d => {
-                const r = d.data();
-                div.innerHTML += `<div class="col-md-6 mb-2"><div class="card"><div class="card-header d-flex justify-content-between"><b>${r.reportId}</b><small>${r.author}</small></div><div class="card-body"><h5>${r.title}</h5><p style="white-space:pre-wrap;height:100px;overflow:hidden">${r.content}</p><button class="btn btn-sm btn-light" onclick="alert('${r.content.replace(/\n/g,'\\n')}')">Lesen</button></div></div></div>`;
-            });
-        }
-
-        // --- 11. EMPLOYEE & MISC LOGIC ---
-        async function loadEmployeeArea() {
-            document.getElementById('personalNotes').value = currentUser.notes || "";
-            const tbody = document.getElementById('roster-table-body');
-            const can = currentUser.roleInfo.canManage;
-            if(!can || (!can.length && can !== "ALL")) {
-                document.getElementById('roster-management-area').classList.add('hidden');
-                document.getElementById('roster-denied').classList.remove('hidden');
-                return;
-            }
-            document.getElementById('roster-management-area').classList.remove('hidden');
-            document.getElementById('roster-denied').classList.add('hidden');
-            
-            const snap = await db.collection('employees').get();
-            tbody.innerHTML = "";
-            snap.forEach(d => {
-                const e = d.data();
-                let show = can === "ALL" || can.includes(e.rank);
-                if(show) tbody.innerHTML += `<tr><td>${e.username}</td><td>${e.rank}</td><td><button class="btn btn-sm btn-danger" onclick="alert('Demo: User fired')">X</button></td></tr>`;
-            });
-        }
-
-        async function saveNotes() {
-            await db.collection('employees').doc(currentUser.uid).update({ notes: document.getElementById('personalNotes').value });
-            alert("Notizen gespeichert.");
-        }
-
-        function openRegisterUserModal() {
-            const sel = document.getElementById('regRank'); sel.innerHTML = "";
-            const allow = currentUser.roleInfo.canManage;
-            if(allow === "ALL") Object.keys(ROLES).forEach(k => sel.innerHTML += `<option>${k}</option>`);
-            else allow.forEach(k => sel.innerHTML += `<option>${k}</option>`);
-            new bootstrap.Modal(document.getElementById('registerUserModal')).show();
-        }
-
-        async function processRegistration() {
-            const u = document.getElementById('regUser').value;
-            const p = document.getElementById('regPass').value;
-            const r = document.getElementById('regRank').value;
-            const email = u.trim().toLowerCase().replace(/\s+/g, '.') + emailDomain;
-
-            try {
-                const cred = await firebase.auth().createUserWithEmailAndPassword(email, p);
-                await db.collection('employees').doc(cred.user.uid).set({ username: u, rank: r, notes: "" });
-                if(document.getElementById('autoCreateCiv').checked) {
-                    const sp = u.split('.');
-                    if(sp.length>1) await db.collection('civilians').add({ firstName: sp[0], lastName: sp[1], tags: ["Beamter"], dob:"01.01.1990", height:180, img:"", address:"", internalAffairs:"" });
-                }
-                bootstrap.Modal.getInstance(document.getElementById('registerUserModal')).hide();
-                showMsg("Erfolg", "Mitarbeiter erstellt.");
-            } catch(e) { showMsg("Fehler", e.message); }
-        }
-
-        function loadLiveWanteds() {
-            db.collection('civilians').where('tags','array-contains','Wanted').limit(5).onSnapshot(s => {
-                const d = document.getElementById('dashboard-wanteds');
-                d.innerHTML = "";
-                if(s.empty) d.innerHTML = "Keine aktiven Fahndungen.";
-                s.forEach(o => d.innerHTML += `<div class="alert alert-danger p-1 mb-1">${o.data().firstName} ${o.data().lastName}</div>`);
-            });
-        }
-        
-        // --- 12. PENAL CODE REFERENCE RENDER ---
-        function renderLaws() {
-            const l = document.getElementById('law-list');
-            const q = document.getElementById('lawSearch').value.toLowerCase();
-            l.innerHTML = "";
-            penalCodeDB.forEach(x => {
-                if(x.de.toLowerCase().includes(q)) l.innerHTML += `<div class="list-group-item bg-dark text-white border-secondary"><b>${x.id}</b> ${x.de} <span class="badge bg-secondary float-end">$${x.fine} | ${x.months} M</span></div>`;
-            });
-        }
+        // Clock Update
+        setInterval(() => {
+            const now = new Date();
+            document.getElementById('system-time').innerText = now.toLocaleString('de-DE', { hour: '2-digit', minute: '2-digit', second: '2-digit', day: '2-digit', month: '2-digit', year: 'numeric' });
+        }, 1000);
     </script>
 </body>
 </html>
