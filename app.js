@@ -627,3 +627,4 @@ async function saveIACase() {
     closeModal();
     loadIACases();
 }
+
