@@ -33,7 +33,14 @@ async function handleLogin() {
             document.getElementById('current-user-name').innerText = currentUser.username;
             document.getElementById('current-rank').innerText = `${currentUser.rank}`;
             document.getElementById('user-avatar').innerText = currentUser.username.charAt(0).toUpperCase();
+            // 1. Initialer Status: Melde den Officer an
+            updateMyStatus('10-8'); 
+            document.getElementById('my-status-select').value = '10-8';
 
+            // 2. Starte die Monitore
+            initDashboard();      // Dashboard (BOLO)
+            initDispatchMonitor(); // <-- NEU: Leitstelle starten
+            
             applyTheme(currentUser.department);
             checkPermissions();
             startWantedListener();
@@ -630,6 +637,92 @@ async function deleteBOLO(id) {
     if(confirm("Diese Meldung löschen?")) {
         await db.collection('bolos').doc(id).delete();
     }
+}
+
+// ==========================================
+// 12. STATUS & LEITSTELLE (DISPATCH)
+// ==========================================
+
+// A. Meinen eigenen Status ändern
+async function updateMyStatus(newStatus) {
+    if(!currentUser) return;
+
+    // Farbe des Punktes im Header ändern
+    const indicator = document.getElementById('status-indicator');
+    if(newStatus === '10-8') indicator.className = "h-2 w-2 rounded-full bg-green-500 shadow-[0_0_10px_#22c55e]";
+    else if(newStatus === '10-6') indicator.className = "h-2 w-2 rounded-full bg-yellow-500 shadow-[0_0_10px_#eab308]";
+    else indicator.className = "h-2 w-2 rounded-full bg-red-500";
+
+    // In Datenbank schreiben
+    try {
+        await db.collection('users').doc(currentUser.username).update({
+            status: newStatus,
+            lastStatusChange: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        // Feedback nicht nötig, sieht man sofort
+    } catch(e) { console.error("Status Update Fehler:", e); }
+}
+
+// B. Live-Überwachung aller Einheiten
+let dispatchUnsubscribe = null;
+
+function initDispatchMonitor() {
+    if(dispatchUnsubscribe) dispatchUnsubscribe(); // Alten Listener stoppen
+
+    const listLSPD = document.getElementById('dispatch-list-lspd');
+    const listLSMS = document.getElementById('dispatch-list-lsms');
+    
+    // Wir holen ALLE User, die NICHT "10-7" (Offline) sind.
+    // Achtung: Wenn du das erste Mal ausführst, müssen User einmal ihren Status setzen, damit das Feld existiert.
+    dispatchUnsubscribe = db.collection('users')
+        .onSnapshot(snapshot => {
+            listLSPD.innerHTML = "";
+            listLSMS.innerHTML = "";
+            
+            let countLSPD = 0;
+            let countLSMS = 0;
+
+            snapshot.forEach(doc => {
+                const u = doc.data();
+                // Wenn kein Status gesetzt ist oder "10-7", ignorieren wir sie in der Liste (außer man will auch Offline sehen)
+                if (!u.status || u.status === '10-7') return;
+
+                // Design je nach Status
+                let statusColor = "text-green-500 border-green-500/30 bg-green-900/10";
+                let statusIcon = "🟢";
+                
+                if(u.status === '10-6') {
+                    statusColor = "text-yellow-500 border-yellow-500/30 bg-yellow-900/10";
+                    statusIcon = "🟡";
+                }
+
+                const html = `
+                    <div class="flex justify-between items-center p-3 rounded border border-slate-700 bg-slate-800/80 animate-fadeIn">
+                        <div>
+                            <div class="font-bold text-white text-sm">${u.username}</div>
+                            <div class="text-[10px] text-slate-400">${u.rank || 'Officer'}</div>
+                        </div>
+                        <div class="px-2 py-1 rounded text-xs font-mono font-bold border ${statusColor}">
+                            ${u.status}
+                        </div>
+                    </div>`;
+
+                // TRENNUNG NACH DEPARTMENT
+                // Wir prüfen, ob im Department-Namen "Marshal" vorkommt oder das Kürzel LSMS ist
+                if (u.department === 'MARSHAL' || u.department === 'LSMS' || (u.department && u.department.includes('Marshal'))) {
+                    listLSMS.innerHTML += html;
+                    countLSMS++;
+                } else {
+                    // Alles andere (LSPD, DOJ, etc.) landet links, oder man filtert DOJ raus.
+                    listLSPD.innerHTML += html;
+                    countLSPD++;
+                }
+            });
+
+            // Zähler aktualisieren
+            document.getElementById('count-lspd').innerText = countLSPD;
+            document.getElementById('count-lsms').innerText = countLSMS;
+        });
 }
 
 console.log("SYSTEM GELADEN: ENDE");
