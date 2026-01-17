@@ -172,7 +172,7 @@ async function searchPerson() {
     const term = input.value.trim().toLowerCase();
 
     // Reset bei leerem Feld
-    if (term.length === 3) {
+    if (term.length === 0) {
         resultsDiv.innerHTML = "<p class='text-slate-500 col-span-3 text-center'>Geben Sie einen Namen ein...</p>";
         return;
     }
