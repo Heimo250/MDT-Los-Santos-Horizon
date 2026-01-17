@@ -192,15 +192,21 @@ async function viewProfile(personId) {
     const modal = document.getElementById('modal-person');
     if(modal) modal.classList.remove('hidden');
     
+    // 1. PERSONENDATEN LADEN
     const doc = await db.collection('persons').doc(personId).get();
-    if (!doc.exists) return;
-    const p = doc.data();
+    if (!doc.exists) return alert("Fehler: Akte nicht gefunden.");
     
+    const p = doc.data();
+    const currentLastname = p.lastname; // Für die Suche wichtig
+
+    // UI befüllen
+    document.getElementById('p-id-display').innerText = "ID: " + doc.id;
     document.getElementById('p-firstname').value = p.firstname;
     document.getElementById('p-lastname').value = p.lastname;
     document.getElementById('p-dob').value = p.dob;
     document.getElementById('p-height').value = p.height;
     
+    // Tags setzen
     selectedTags = p.tags || []; 
     document.querySelectorAll('.tag-btn').forEach(btn => {
         const tag = btn.getAttribute('data-tag');
@@ -210,6 +216,60 @@ async function viewProfile(personId) {
             else btn.classList.add('bg-blue-600', 'text-white', 'shadow-lg');
         }
     });
+
+    // 2. FAHRZEUGE LADEN (Verknüpft über ownerId)
+    const vList = document.getElementById('p-vehicle-list');
+    vList.innerHTML = "<span class='text-xs text-slate-500 animate-pulse'>Suche Fahrzeuge...</span>";
+    
+    try {
+        const vSnap = await db.collection('vehicles').where('ownerId', '==', doc.id).get();
+        vList.innerHTML = "";
+        
+        if (vSnap.empty) {
+            vList.innerHTML = "<span class='text-xs text-slate-500'>Keine Fahrzeuge registriert.</span>";
+        } else {
+            vSnap.forEach(vDoc => {
+                const v = vDoc.data();
+                vList.innerHTML += `
+                    <div class="flex justify-between items-center bg-slate-900 p-2 rounded border border-slate-700">
+                        <span class="font-mono text-yellow-500 font-bold text-xs">${v.plate}</span>
+                        <span class="text-[10px] text-slate-300">${v.model}</span>
+                    </div>`;
+            });
+        }
+    } catch(e) { console.error("Vehicle Load Error", e); }
+
+    // 3. BERICHTE LADEN (Textsuche nach Nachname)
+    // Hinweis: Das sucht in den letzten 50 Berichten nach dem Namen.
+    const rList = document.getElementById('p-report-list');
+    rList.innerHTML = "<span class='text-xs text-slate-500 animate-pulse'>Durchsuche Akten...</span>";
+
+    try {
+        const rSnap = await db.collection('reports').orderBy('timestamp', 'desc').limit(50).get();
+        rList.innerHTML = "";
+        let foundCount = 0;
+
+        rSnap.forEach(rDoc => {
+            const r = rDoc.data();
+            // Prüfen ob der Nachname im Betreff oder Inhalt vorkommt
+            if ( (r.subject && r.subject.includes(currentLastname)) || (r.content && r.content.includes(currentLastname)) ) {
+                foundCount++;
+                const dateStr = r.timestamp ? r.timestamp.toDate().toLocaleDateString() : 'N/A';
+                rList.innerHTML += `
+                    <div class="bg-slate-900 p-2 rounded border-l-2 border-blue-500 cursor-pointer hover:bg-slate-800" onclick="alert('${r.content.replace(/\n/g, "\\n")}')">
+                        <div class="flex justify-between text-[10px] text-slate-500">
+                            <span>${r.reportId}</span>
+                            <span>${dateStr}</span>
+                        </div>
+                        <div class="text-xs font-bold text-slate-300 truncate">${r.subject}</div>
+                    </div>`;
+            }
+        });
+
+        if (foundCount === 0) {
+            rList.innerHTML = "<span class='text-xs text-slate-500'>Keine Erwähnungen gefunden.</span>";
+        }
+    } catch(e) { console.error("Report Load Error", e); }
 }
 
 // --- 5. FAHRZEUGE ---
