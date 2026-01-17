@@ -1,6 +1,8 @@
 console.log("SYSTEM STARTET... LADE MODULE");
 
-// --- CONFIG ---
+// ==========================================
+// 1. CONFIG & SETUP
+// ==========================================
 const firebaseConfig = {
     apiKey: "AIzaSyD6I01je_MrT7KzeFE7BD1IGc4amukK_6Q",
     authDomain: "mdt-system-c18ea.firebaseapp.com",
@@ -17,84 +19,111 @@ let currentUser = null;
 let selectedTags = [];
 let currentReportFilter = 'ALL';
 
-// --- LOGIN ---
+// ==========================================
+// 2. LOGIN & THEME
+// ==========================================
 async function handleLogin() {
     const userVal = document.getElementById('login-user').value.trim();
     const passVal = document.getElementById('login-pass').value;
+
     if (!userVal || !passVal) return alert("Daten fehlen.");
 
     try {
         const doc = await db.collection('users').doc(userVal).get();
         if (doc.exists && doc.data().password === passVal) {
             currentUser = doc.data();
-            currentUser.username = doc.id;
+            currentUser.username = doc.id; // WICHTIG: Die ID ist der Username
             
             document.getElementById('login-screen').classList.add('hidden');
-            document.getElementById('current-user-name').innerText = currentUser.username;
-            document.getElementById('current-rank').innerText = `${currentUser.rank}`;
-            document.getElementById('user-avatar').innerText = currentUser.username.charAt(0).toUpperCase();
             
-            // 1. Initialer Status: Melde den Officer an
-            updateMyStatus('10-8'); 
-            document.getElementById('my-status-select').value = '10-8';
+            // Header Infos füllen
+            if(document.getElementById('current-user-name')) 
+                document.getElementById('current-user-name').innerText = currentUser.username;
+            if(document.getElementById('current-rank')) 
+                document.getElementById('current-rank').innerText = `${currentUser.rank}`;
+            if(document.getElementById('user-avatar')) 
+                document.getElementById('user-avatar').innerText = currentUser.username.charAt(0).toUpperCase();
+
+            // Setup starten
             applyTheme(currentUser.department);
             checkPermissions();
-            startWantedListener();
             
-            // 2. Starte die Monitore
-           initDashboard();       // Startet BOLO Feed
-            initDispatchMonitor(); // Startet Leitstelle
-            updateMyStatus('10-8');// Setzt dich automatisch auf Grün
-            
-            applyTheme(currentUser.department);
-            checkPermissions();
-            startWantedListener();
-            initDashboard();
+            // --- LIVE SYSTEME STARTEN ---
+            startWantedListener(); // Gesuchte Personen
+            initDashboard();       // BOLO Feed
+            initDispatchMonitor(); // Leitstelle
+            updateMyStatus('10-8');// Auto-Login Status
+
             showPage('home');
-        } else { alert("Falsche Daten."); }
-    } catch (e) { alert("Login Fehler: " + e.message); }
+        } else {
+            alert("Falsche Daten.");
+        }
+    } catch (error) { alert("Login Fehler: " + error.message); }
 }
 
 function applyTheme(dept) {
     const header = document.getElementById('dept-header');
     const icon = document.querySelector('.header-icon');
-    document.body.className = "flex h-screen text-sm"; 
+    
+    // Reset classes
+    document.body.classList.remove("theme-marshal", "theme-doj", "theme-ia");
     
     if (dept === "MARSHAL") {
         document.body.classList.add("theme-marshal");
-        header.innerText = "MARSHAL SERVICE";
-        header.classList.add("text-amber-500");
-        icon.style.backgroundColor = "#d97706";
+        if(header) {
+            header.innerText = "MARSHAL SERVICE";
+            header.classList.remove("text-blue-400", "text-purple-500");
+            header.classList.add("text-amber-500");
+        }
+        if(icon) icon.style.backgroundColor = "#d97706";
     } else if (dept === "DOJ") {
         document.body.classList.add("theme-doj");
-        header.innerText = "DEPT. OF JUSTICE";
-        header.classList.add("text-purple-500");
-        icon.style.backgroundColor = "#9333ea";
+        if(header) {
+            header.innerText = "DEPT. OF JUSTICE";
+            header.classList.remove("text-blue-400", "text-amber-500");
+            header.classList.add("text-purple-500");
+        }
+        if(icon) icon.style.backgroundColor = "#9333ea";
     } else {
-        header.innerText = "LSPD POLICE DEPT";
-        icon.style.backgroundColor = "#3b82f6";
+        if(header) {
+            header.innerText = "LSPD POLICE DEPT";
+            header.classList.remove("text-amber-500", "text-purple-500");
+            header.classList.add("text-blue-400");
+        }
+        if(icon) icon.style.backgroundColor = "#3b82f6";
     }
 }
 
 function checkPermissions() {
     const rank = currentUser.rank;
     document.querySelectorAll('.judge-only, .ia-only, .command-only').forEach(el => el.classList.add('hidden'));
-    if (rank.includes("Command") || rank === "Attorney General") document.querySelectorAll('.command-only').forEach(el => el.classList.remove('hidden'));
-    if (["Judge", "Chief Justice", "Attorney General"].includes(rank)) document.querySelectorAll('.judge-only').forEach(el => el.classList.remove('hidden'));
-    if (rank === "Attorney General") document.querySelectorAll('.ia-only').forEach(el => el.classList.remove('hidden'));
+
+    if (rank.includes("Command") || rank === "Attorney General") 
+        document.querySelectorAll('.command-only').forEach(el => el.classList.remove('hidden'));
+    
+    if (["Judge", "Chief Justice", "Attorney General"].includes(rank)) 
+        document.querySelectorAll('.judge-only').forEach(el => el.classList.remove('hidden'));
+    
+    if (rank === "Attorney General") 
+        document.querySelectorAll('.ia-only').forEach(el => el.classList.remove('hidden'));
 }
 
-// --- NAV ---
+// ==========================================
+// 3. UI NAVIGATION
+// ==========================================
 function showPage(pageId) {
     document.querySelectorAll('.page').forEach(p => p.classList.add('hidden'));
     document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
     
     const target = document.getElementById('page-' + pageId);
     if (target) target.classList.remove('hidden');
+    
     const nav = document.getElementById('nav-' + pageId);
     if (nav) nav.classList.add('active');
-    
+
+    // Live-Updates trigger
     if (pageId === 'home') initDashboard();
+    if (pageId === 'dispatch') initDispatchMonitor();
     if (pageId === 'reports') loadReports();
     if (pageId === 'employees') renderEmployeePanel();
     if (pageId === 'calculator') loadLaws();
@@ -108,11 +137,15 @@ function closeModal() {
         if (el) el.classList.add('hidden');
     });
     selectedTags = [];
-    document.querySelectorAll('.tag-btn').forEach(btn => btn.classList.remove('bg-blue-600', 'bg-red-600', 'text-white', 'shadow-lg'));
+    document.querySelectorAll('.tag-btn').forEach(btn => {
+        btn.classList.remove('bg-blue-600', 'bg-red-600', 'text-white', 'shadow-lg');
+    });
     document.querySelectorAll('input, textarea').forEach(i => i.value = '');
 }
 
-// --- PERSONEN ---
+// ==========================================
+// 4. PERSONEN (CIVIL REGISTRY)
+// ==========================================
 function toggleTag(btn) {
     const tag = btn.getAttribute('data-tag');
     if (selectedTags.includes(tag)) {
@@ -127,28 +160,38 @@ function toggleTag(btn) {
 
 async function searchPerson() {
     const input = document.getElementById('search-person-input');
-    const resDiv = document.getElementById('person-results');
-    if (!resDiv) return;
+    const resultsDiv = document.getElementById('person-results');
+    if (!resultsDiv) return;
 
     const term = input.value.trim().toLowerCase();
-    resDiv.innerHTML = "<p class='text-slate-500'>Suche...</p>";
+    resultsDiv.innerHTML = "<p class='text-slate-500'>Suche...</p>";
 
     try {
         let query = db.collection('persons');
-        if (term.length > 0) query = query.where('searchKey', '>=', term).where('searchKey', '<=', term + '\uf8ff');
-        
-        const snap = await query.limit(10).get();
-        resDiv.innerHTML = "";
-        if (snap.empty) { resDiv.innerHTML = "<p class='text-slate-500 text-center'>Keine Treffer.</p>"; return; }
+        if (term.length > 0) {
+            query = query.where('searchKey', '>=', term).where('searchKey', '<=', term + '\uf8ff');
+        }
 
-        snap.forEach(doc => {
+        const snapshot = await query.limit(10).get();
+        resultsDiv.innerHTML = "";
+
+        if (snapshot.empty) {
+            resultsDiv.innerHTML = "<p class='text-slate-500 col-span-3 text-center'>Keine Treffer.</p>";
+            return;
+        }
+
+        snapshot.forEach(doc => {
             const p = doc.data();
             const isWanted = p.tags && p.tags.includes('Wanted');
-            const border = isWanted ? "border-red-500" : "border-slate-600";
-            resDiv.innerHTML += `
-                <div class="glass-panel p-4 rounded border-l-4 ${border} hover:bg-slate-800 cursor-pointer group" onclick="viewProfile('${doc.id}')">
-                    <div class="flex justify-between">
-                        <div><h4 class="font-bold text-white">${p.firstname} ${p.lastname}</h4><p class="text-xs text-slate-400">Geb: ${p.dob}</p></div>
+            const borderClass = isWanted ? "border-red-500" : "border-slate-600";
+            
+            resultsDiv.innerHTML += `
+                <div class="glass-panel p-4 rounded border-l-4 ${borderClass} hover:bg-slate-800 transition cursor-pointer group" onclick="viewProfile('${doc.id}')">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <h4 class="font-bold text-lg text-white">${p.firstname} ${p.lastname}</h4>
+                            <p class="text-xs text-slate-400">Geb: ${p.dob}</p>
+                        </div>
                         ${isWanted ? '🚨' : ''}
                     </div>
                 </div>`;
@@ -162,9 +205,13 @@ async function savePerson() {
     if(!lastname) return alert("Name fehlt.");
     
     const docId = `${firstname}_${lastname}`.toLowerCase().replace(/\s/g, '');
+    
+    // FIX: Vorname + Nachname als Suchbegriff
+    const searchKey = (firstname + " " + lastname).toLowerCase();
+
     const pData = {
         firstname, lastname,
-        searchKey: lastname.toLowerCase(), 
+        searchKey: searchKey, 
         dob: document.getElementById('p-dob').value,
         height: document.getElementById('p-height').value,
         tags: selectedTags,
@@ -204,6 +251,7 @@ async function viewProfile(personId) {
         }
     });
 
+    // LOAD VEHICLES
     const vList = document.getElementById('p-vehicle-list');
     if(vList) {
         vList.innerHTML = "<span class='text-xs text-slate-500 animate-pulse'>Suche...</span>";
@@ -216,11 +264,13 @@ async function viewProfile(personId) {
         });
     }
 
+    // LOAD RECORDS & REPORTS
     const rList = document.getElementById('p-report-list');
     if(rList) {
         rList.innerHTML = "<span class='text-xs text-slate-500 animate-pulse'>Lade Akten...</span>";
         try {
             rList.innerHTML = "";
+            // Strafakten
             const crSnap = await db.collection('criminal_records').where('suspectId', '==', doc.id).orderBy('timestamp', 'desc').get();
             if(!crSnap.empty) {
                 rList.innerHTML += "<div class='text-[10px] text-red-500 font-bold mb-1'>STRAFAKTEN</div>";
@@ -229,6 +279,7 @@ async function viewProfile(personId) {
                     rList.innerHTML += `<div class="bg-red-900/20 p-2 rounded border-l-2 border-red-500 mb-2 cursor-pointer" onclick="alert('${r.content.replace(/\n/g, "\\n")}')"><div class="text-[10px] text-slate-400">${r.date}</div><div class="text-xs text-white font-bold">${r.title}</div></div>`;
                 });
             }
+            // Berichte
             const rSnap = await db.collection('reports').orderBy('timestamp', 'desc').limit(50).get();
             let found = false;
             rSnap.forEach(rDoc => {
@@ -243,18 +294,31 @@ async function viewProfile(personId) {
     }
 }
 
-// --- VEHICLES ---
+// ==========================================
+// 5. FAHRZEUGE (VEHICLES)
+// ==========================================
 async function liveSearchOwner(query) {
     const dropdown = document.getElementById('owner-dropdown');
-    if (!query || query.length < 2) { dropdown.classList.add('hidden'); return; }
+    if (!query || query.length < 2) {
+        dropdown.classList.add('hidden');
+        return;
+    }
     try {
-        const snap = await db.collection('persons').where('searchKey', '>=', query.toLowerCase()).where('searchKey', '<=', query.toLowerCase() + '\uf8ff').limit(5).get();
+        const snapshot = await db.collection('persons')
+            .where('searchKey', '>=', query.toLowerCase())
+            .where('searchKey', '<=', query.toLowerCase() + '\uf8ff')
+            .limit(5).get();
+        
         dropdown.innerHTML = "";
         dropdown.classList.remove('hidden');
         dropdown.style.zIndex = "100";
 
-        if (snap.empty) { dropdown.innerHTML = "<div class='p-2 text-xs text-slate-500'>Nichts gefunden</div>"; return; }
-        snap.forEach(doc => {
+        if (snapshot.empty) {
+            dropdown.innerHTML = "<div class='p-2 text-xs text-slate-500'>Nichts gefunden</div>";
+            return;
+        }
+
+        snapshot.forEach(doc => {
             const p = doc.data();
             const div = document.createElement('div');
             div.className = "p-2 hover:bg-slate-700 cursor-pointer text-xs bg-slate-900 text-white border-b border-slate-700";
@@ -272,6 +336,7 @@ async function liveSearchOwner(query) {
 async function saveVehicle() {
     const plate = document.getElementById('v-plate').value.toUpperCase();
     if (!plate) return alert("Kennzeichen fehlt.");
+    
     await db.collection('vehicles').doc(plate).set({
         plate,
         model: document.getElementById('v-model').value,
@@ -289,31 +354,45 @@ async function searchVehicle() {
     if (!input || !div) return;
 
     const term = input.value.trim().toUpperCase();
-    if (term.length === 0) { div.innerHTML = "<p class='text-slate-500 text-center'>Kennzeichen eingeben...</p>"; return; }
+    if (term.length === 0) {
+        div.innerHTML = "<p class='text-slate-500 col-span-3 text-center'>Kennzeichen eingeben...</p>";
+        return;
+    }
 
     try {
-        const snap = await db.collection('vehicles').where('plate', '>=', term).where('plate', '<=', term + '\uf8ff').limit(10).get();
+        const snapshot = await db.collection('vehicles')
+            .where('plate', '>=', term).where('plate', '<=', term + '\uf8ff')
+            .limit(10).get();
+            
         div.innerHTML = "";
-        if (snap.empty) { div.innerHTML = "<p class='text-slate-500 text-center'>Kein Fahrzeug.</p>"; return; }
+        if (snapshot.empty) {
+            div.innerHTML = "<p class='text-slate-500 col-span-3 text-center'>Kein Fahrzeug.</p>";
+            return;
+        }
 
-        for (const doc of snap.docs) {
+        for (const doc of snapshot.docs) {
             const v = doc.data();
             let ownerName = "Unbekannt";
             if(v.ownerId) {
                 const oDoc = await db.collection('persons').doc(v.ownerId).get();
                 if(oDoc.exists) ownerName = `${oDoc.data().firstname} ${oDoc.data().lastname}`;
             }
+
             div.innerHTML += `
                 <div class="glass-panel p-4 rounded border-l-4 border-yellow-500 hover:bg-slate-800 transition">
                     <span class="bg-yellow-500 text-black font-bold px-2 text-sm">${v.plate}</span>
                     <span class="text-xs text-slate-400 ml-2">${v.model}</span>
-                    <p class="text-xs text-blue-400 mt-2 cursor-pointer" onclick="showPage('persons'); setTimeout(() => {document.getElementById('search-person-input').value='${ownerName.split(' ')[1]||''}'; searchPerson()}, 500)">👤 ${ownerName}</p>
+                    <p class="text-xs text-blue-400 mt-2 cursor-pointer" onclick="showPage('persons'); setTimeout(() => {document.getElementById('search-person-input').value='${ownerName.split(' ')[1]||''}'; searchPerson()}, 500)">
+                        👤 ${ownerName}
+                    </p>
                 </div>`;
         }
     } catch (e) { console.error(e); }
 }
 
-// --- REPORTS ---
+// ==========================================
+// 6. REPORTS
+// ==========================================
 async function openReportModal() {
     const prefix = currentUser.department === "MARSHAL" ? "LSMS" : "LSPD";
     const visual = document.getElementById('report-card-visual');
@@ -340,11 +419,16 @@ async function saveReport() {
     const id = document.getElementById('r-id-preview').innerText;
     const content = document.getElementById('r-content').value;
     const subj = document.getElementById('r-subject').value;
+    
     if(!subj) return alert("Betreff fehlt.");
 
     await db.collection('reports').doc(id).set({
-        reportId: id, deptPrefix: id.split('-')[0], subject: subj, content,
-        author: currentUser.username, rank: currentUser.rank,
+        reportId: id,
+        deptPrefix: id.split('-')[0],
+        subject: subj,
+        content,
+        author: currentUser.username,
+        rank: currentUser.rank,
         location: document.getElementById('r-location').value,
         timestamp: firebase.firestore.FieldValue.serverTimestamp()
     });
@@ -364,6 +448,7 @@ async function loadReports() {
         const r = doc.data();
         if (currentReportFilter !== 'ALL' && r.deptPrefix !== currentReportFilter) return;
         const color = r.deptPrefix === "LSMS" ? "border-amber-600 text-amber-500" : "border-blue-600 text-blue-400";
+
         list.innerHTML += `
             <div class="glass-panel p-3 rounded border-l-4 ${color.split(' ')[0]} hover:bg-slate-800 cursor-pointer">
                  <div class="flex justify-between">
@@ -381,7 +466,9 @@ function filterReports(filter) {
     loadReports();
 }
 
-// --- LISTENERS ---
+// ==========================================
+// 7. LISTENERS
+// ==========================================
 function startWantedListener() {
     db.collection('persons').where('tags', 'array-contains', 'Wanted').onSnapshot(snap => {
         const tbody = document.getElementById('wanted-list-body');
@@ -395,13 +482,18 @@ function startWantedListener() {
                 <tr class="hover:bg-slate-800/50 transition border-b border-slate-800">
                     <td class="p-4 font-bold text-white">${p.firstname} ${p.lastname}</td>
                     <td class="text-red-400 font-mono text-xs">GESUCHT</td>
-                    <td class="text-right p-4"><button onclick="showPage('persons'); setTimeout(() => { document.getElementById('search-person-input').value = '${p.lastname}'; searchPerson(); }, 500);" class="text-xs bg-slate-700 px-3 py-1 rounded">Akte</button></td>
+                    <td class="text-right p-4">
+                        <button onclick="showPage('persons'); setTimeout(() => { document.getElementById('search-person-input').value = '${p.lastname}'; searchPerson(); }, 500);" 
+                        class="text-xs bg-slate-700 px-3 py-1 rounded">Akte</button>
+                    </td>
                 </tr>`;
         });
     });
 }
 
-// --- EMPLOYEES & LAWS ---
+// ==========================================
+// 8. EMPLOYEES & LAWS
+// ==========================================
 const LAWS = [
     { id: "§1", name: "Speeding", price: 500, jail: 0 },
     { id: "§2", name: "Körperverletzung", price: 2500, jail: 10 },
@@ -411,13 +503,26 @@ let cart = [];
 
 function loadLaws() {
     document.getElementById('law-list').innerHTML = LAWS.map(l => `
-        <div class="p-2 hover:bg-slate-700 cursor-pointer flex justify-between text-xs" onclick="addToCart('${l.id}')"><span>${l.name}</span> <span class="text-green-400">$${l.price}</span></div>`).join('');
+        <div class="p-2 hover:bg-slate-700 cursor-pointer flex justify-between text-xs" onclick="addToCart('${l.id}')">
+            <span>${l.name}</span> <span class="text-green-400">$${l.price}</span>
+        </div>
+    `).join('');
 }
-function addToCart(id) { cart.push(LAWS.find(l => l.id === id)); renderCart(); }
+
+function addToCart(id) {
+    cart.push(LAWS.find(l => l.id === id));
+    renderCart();
+}
+
 function renderCart() {
-    document.getElementById('calc-cart').innerHTML = cart.map((c, i) => `<div class="flex justify-between text-xs p-1 border-b border-slate-700"><span>${c.name}</span> <button onclick="cart.splice(${i},1);renderCart()" class="text-red-500">x</button></div>`).join('');
+    document.getElementById('calc-cart').innerHTML = cart.map((c, i) => `
+        <div class="flex justify-between text-xs p-1 border-b border-slate-700">
+            <span>${c.name}</span> <button onclick="cart.splice(${i},1);renderCart()" class="text-red-500">x</button>
+        </div>
+    `).join('');
     updateTotal();
 }
+
 function updateTotal() {
     let sum = cart.reduce((a, b) => a + b.price, 0);
     let jail = cart.reduce((a, b) => a + b.jail, 0);
@@ -432,7 +537,11 @@ async function renderEmployeePanel() {
     list.innerHTML = "";
     snap.forEach(doc => {
         const u = doc.data();
-        list.innerHTML += `<div class="flex justify-between p-2 bg-slate-800/50 mb-1 rounded border border-slate-700 items-center"><div><span class="font-bold text-blue-400">${doc.id}</span> <span class="text-xs text-slate-500">(${u.rank})</span></div><button onclick="removeUser('${doc.id}')" class="text-red-500 text-xs">Entfernen</button></div>`;
+        list.innerHTML += `
+            <div class="flex justify-between p-2 bg-slate-800/50 mb-1 rounded border border-slate-700 items-center">
+                <div><span class="font-bold text-blue-400">${doc.id}</span> <span class="text-xs text-slate-500">(${u.rank})</span></div>
+                <button onclick="removeUser('${doc.id}')" class="text-red-500 text-xs">Entfernen</button>
+            </div>`;
     });
 }
 
@@ -446,9 +555,17 @@ async function uiRegisterEmployee() {
     alert("Angelegt.");
     renderEmployeePanel();
 }
-async function removeUser(id) { if(confirm("Löschen?")) { await db.collection('users').doc(id).delete(); renderEmployeePanel(); } }
 
-// --- SPECIAL DEPARTMENTS ---
+async function removeUser(id) {
+    if(confirm("Löschen?")) {
+        await db.collection('users').doc(id).delete();
+        renderEmployeePanel();
+    }
+}
+
+// ==========================================
+// 9. SPECIAL (COURT & IA)
+// ==========================================
 async function loadCourtRecords() {
     const list = document.getElementById('court-record-list');
     if(!list) return;
@@ -456,13 +573,28 @@ async function loadCourtRecords() {
     list.innerHTML = "";
     snap.forEach(doc => {
         const c = doc.data();
-        list.innerHTML += `<div class="glass-panel p-4 border-l-4 ${c.status==='OPEN' ? 'border-green-500' : 'border-slate-600'}"><span class="font-bold text-purple-400">${c.title}</span> <span class="text-xs bg-slate-900 px-2 rounded">${c.status}</span><p class="text-xs text-slate-400 mt-2">${c.decision ? c.decision.substring(0,100) : ''}...</p><button onclick="openCourtModal('${doc.id}')" class="text-xs mt-2 text-purple-400 underline">Bearbeiten</button></div>`;
+        list.innerHTML += `
+            <div class="glass-panel p-4 border-l-4 ${c.status==='OPEN' ? 'border-green-500' : 'border-slate-600'}">
+                <span class="font-bold text-purple-400">${c.title}</span> <span class="text-xs bg-slate-900 px-2 rounded">${c.status}</span>
+                <p class="text-xs text-slate-400 mt-2">${c.decision ? c.decision.substring(0,100) : ''}...</p>
+                <button onclick="openCourtModal('${doc.id}')" class="text-xs mt-2 text-purple-400 underline">Bearbeiten</button>
+            </div>`;
     });
 }
+
 function openCourtModal() { document.getElementById('modal-court').classList.remove('hidden'); }
+
 async function saveCourtRecord() {
-    await db.collection('court_records').add({ title: document.getElementById('c-title').value, decision: document.getElementById('c-decision').value, status: document.getElementById('c-status').value, judge: currentUser.username, timestamp: firebase.firestore.FieldValue.serverTimestamp() });
-    alert("Gespeichert."); closeModal(); loadCourtRecords();
+    await db.collection('court_records').add({
+        title: document.getElementById('c-title').value,
+        decision: document.getElementById('c-decision').value,
+        status: document.getElementById('c-status').value,
+        judge: currentUser.username,
+        timestamp: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    alert("Gespeichert.");
+    closeModal();
+    loadCourtRecords();
 }
 
 async function loadIACases() {
@@ -475,24 +607,46 @@ async function loadIACases() {
         list.innerHTML += `<div class="glass-panel p-4 border-l-4 border-red-600"><h4 class="font-bold text-red-500">${c.target_officer}</h4><p class="text-xs text-slate-300">${c.reason}</p></div>`;
     });
 }
+
 function openIAModal() { document.getElementById('modal-ia').classList.remove('hidden'); }
+
 async function saveIACase() {
-    await db.collection('internal_affairs').add({ target_officer: document.getElementById('ia-target').value, reason: document.getElementById('ia-reason').value, creator: currentUser.username, timestamp: firebase.firestore.FieldValue.serverTimestamp() });
-    alert("IA Fall angelegt."); closeModal(); loadIACases();
+    await db.collection('internal_affairs').add({
+        target_officer: document.getElementById('ia-target').value,
+        reason: document.getElementById('ia-reason').value,
+        creator: currentUser.username,
+        timestamp: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    alert("IA Fall angelegt.");
+    closeModal();
+    loadIACases();
 }
 
-// --- NEW CRIMINAL RECORDS ---
+// ==========================================
+// 10. NEUE STRAFAKTEN (RECORDS)
+// ==========================================
 async function liveSearchSuspectRecord(query) {
     const dropdown = document.getElementById('record-suspect-dropdown');
-    if (!query || query.length < 2) { dropdown.classList.add('hidden'); return; }
+    if (!query || query.length < 2) {
+        dropdown.classList.add('hidden');
+        return;
+    }
     try {
-        const snap = await db.collection('persons').where('searchKey', '>=', query.toLowerCase()).where('searchKey', '<=', query.toLowerCase() + '\uf8ff').limit(5).get();
+        const snapshot = await db.collection('persons')
+            .where('searchKey', '>=', query.toLowerCase())
+            .where('searchKey', '<=', query.toLowerCase() + '\uf8ff')
+            .limit(5).get();
+        
         dropdown.innerHTML = "";
         dropdown.classList.remove('hidden');
         dropdown.style.zIndex = "9999"; 
         
-        if (snap.empty) { dropdown.innerHTML = "<div class='p-3 text-xs text-slate-500'>Keine Person gefunden.</div>"; return; }
-        snap.forEach(doc => {
+        if (snapshot.empty) {
+            dropdown.innerHTML = "<div class='p-3 text-xs text-slate-500'>Keine Person gefunden.</div>";
+            return;
+        }
+
+        snapshot.forEach(doc => {
             const p = doc.data();
             const div = document.createElement('div');
             div.className = "p-3 hover:bg-blue-600 cursor-pointer border-b border-slate-700 text-sm bg-slate-900 text-white font-bold flex justify-between";
@@ -512,13 +666,44 @@ function selectSuspectForRecord(id, name) {
     document.getElementById('record-suspect-id').value = id;
     document.getElementById('record-signature').innerText = currentUser.username;
     
+    // ISO Zeit
     const now = new Date();
     const isoString = new Date(now.getTime() - (now.getTimezoneOffset() * 60000)).toISOString().slice(0,16);
     document.getElementById('record-time').value = isoString;
     const dateStr = now.toLocaleDateString('de-DE');
     const timeStr = now.toLocaleTimeString('de-DE', {hour: '2-digit', minute:'2-digit'});
 
-    document.getElementById('record-content').value = `TATORT, DATUM UND UHRZEIT:\nPLZ ____, am ${dateStr} um ${timeStr} Uhr\n\nBESCHLAGNAHMTE GEGENSTÄNDE:\n- \n\nSACHVERHALT:\nWas ist passiert?:\n\n\nBETEILIGTE BEAMTE:\n- \n\nZEUGEN:\n/\n\nRECHTE VERLESEN:\nDurch ${currentUser.username} am ${dateStr} um ${timeStr} Uhr.\n\nVERMERKE:\n[ ] Kooperativ\n[ ] Nicht Kooperativ`;
+    // TEMPLATE
+    const template = `TATORT, DATUM UND UHRZEIT:
+PLZ ____, am ${dateStr} um ${timeStr} Uhr
+
+BESCHLAGNAHMTE GEGENSTÄNDE:
+- 
+
+SACHVERHALT:
+Was ist passiert?:
+
+
+WER WAR DABEI (z.B. USMS, SMC etc.):
+
+
+FESTNEHMENDER BEAMTER (DN + Name):
+${currentUser.username}
+
+BETEILIGTE BEAMTE (DN + Name):
+- 
+
+ZEUGEN (Name, ggf. Telefonnummer):
+/
+
+RECHTE VERLESEN:
+Die Mirandawarnung wurde durch ${currentUser.username} am ${dateStr} um ${timeStr} Uhr verlesen.
+
+VERMERKE:
+[ ] Kooperatives Verhalten
+[ ] Nicht Kooperatives Verhalten`;
+
+    document.getElementById('record-content').value = template;
 }
 
 function resetRecordForm() {
@@ -540,7 +725,10 @@ async function saveCriminalRecord() {
     try {
         await db.collection('criminal_records').add({
             suspectId, suspectName, title, content,
-            date: timeVal, officer: currentUser.username, officerRank: currentUser.rank, department: currentUser.department,
+            date: timeVal,
+            officer: currentUser.username, 
+            officerRank: currentUser.rank,
+            department: currentUser.department,
             timestamp: firebase.firestore.FieldValue.serverTimestamp()
         });
         alert("Akte angelegt.");
@@ -551,52 +739,30 @@ async function saveCriminalRecord() {
 // ==========================================
 // 11. DASHBOARD / BOLO SYSTEM (LIVE)
 // ==========================================
-
-// Wird beim Starten aufgerufen, um den Live-Listener zu aktivieren
 let boloUnsubscribe = null;
 
 function initDashboard() {
-    // Falls schon ein Listener läuft, stoppen (verhindert doppelte Einträge)
     if(boloUnsubscribe) boloUnsubscribe();
-
     const list = document.getElementById('bolo-list');
     if(!list) return;
 
-    // UI Update Name
     if(currentUser) document.getElementById('dash-user-name').innerText = currentUser.username;
 
-    // LIVE VERBINDUNG zur Datenbank
     boloUnsubscribe = db.collection('bolos').orderBy('timestamp', 'desc').limit(20)
         .onSnapshot(snapshot => {
             list.innerHTML = "";
-            
             if(snapshot.empty) {
                 list.innerHTML = "<div class='text-center text-slate-600 py-10 italic'>Keine aktiven Meldungen. Ruhige Schicht! ☕</div>";
                 return;
             }
-
             snapshot.forEach(doc => {
                 const b = doc.data();
-                
-                // Farben je nach Priorität
-                let borderClass = "border-blue-500";
-                let bgClass = "bg-slate-800/50";
-                let icon = "ℹ️";
-                
-                if (b.priority === 'high') {
-                    borderClass = "border-red-600";
-                    bgClass = "bg-red-900/20";
-                    icon = "🚨";
-                } else if (b.priority === 'warn') {
-                    borderClass = "border-yellow-500";
-                    bgClass = "bg-yellow-900/10";
-                    icon = "⚠️";
-                }
+                let borderClass = "border-blue-500", bgClass = "bg-slate-800/50", icon = "ℹ️";
+                if (b.priority === 'high') { borderClass = "border-red-600"; bgClass = "bg-red-900/20"; icon = "🚨"; } 
+                else if (b.priority === 'warn') { borderClass = "border-yellow-500"; bgClass = "bg-yellow-900/10"; icon = "⚠️"; }
 
-                // Lösch-Button nur für den Ersteller oder Command
                 const canDelete = (currentUser.username === b.author || currentUser.rank.includes('Command') || currentUser.rank === 'Attorney General');
                 const deleteBtn = canDelete ? `<button onclick="deleteBOLO('${doc.id}')" class="text-slate-500 hover:text-red-500 ml-3" title="Löschen">✕</button>` : '';
-
                 const time = b.timestamp ? b.timestamp.toDate().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '';
 
                 list.innerHTML += `
@@ -605,10 +771,7 @@ function initDashboard() {
                         <div class="flex-1">
                             <div class="flex justify-between items-start">
                                 <h4 class="font-bold text-slate-200 text-sm">${b.title}</h4>
-                                <div class="flex items-center">
-                                    <span class="text-[10px] font-mono text-slate-400 mr-2">${time} Uhr</span>
-                                    ${deleteBtn}
-                                </div>
+                                <div class="flex items-center"><span class="text-[10px] font-mono text-slate-400 mr-2">${time} Uhr</span>${deleteBtn}</div>
                             </div>
                             <p class="text-xs text-slate-300 mt-1 whitespace-pre-wrap">${b.content}</p>
                             <p class="text-[10px] text-slate-500 mt-2 text-right">Meldung von: ${b.author}</p>
@@ -631,32 +794,22 @@ async function saveBOLO() {
             author: currentUser.username,
             timestamp: firebase.firestore.FieldValue.serverTimestamp()
         });
-        
-        // Felder leeren
         document.getElementById('bolo-title').value = "";
         document.getElementById('bolo-content').value = "";
     } catch(e) { console.error(e); }
 }
 
 async function deleteBOLO(id) {
-    if(confirm("Diese Meldung löschen?")) {
-        await db.collection('bolos').doc(id).delete();
-    }
+    if(confirm("Löschen?")) await db.collection('bolos').doc(id).delete();
 }
 
 // ==========================================
 // 12. STATUS & LEITSTELLE (DISPATCH)
 // ==========================================
-
-// A. Meinen eigenen Status ändern (FIXED)
 async function updateMyStatus(newStatus) {
-    // Sicherheits-Check: Ist überhaupt wer eingeloggt?
-    if(!currentUser || !currentUser.username) {
-        console.warn("Status-Update blockiert: Nicht eingeloggt.");
-        return;
-    }
+    if(!currentUser || !currentUser.username) return;
 
-    // UI Update (Punkt-Farbe sofort ändern für Feedback)
+    // UI Feedback
     const indicator = document.getElementById('status-indicator');
     if(indicator) {
         if(newStatus === '10-8') indicator.className = "h-2 w-2 rounded-full bg-green-500 shadow-[0_0_10px_#22c55e]";
@@ -664,16 +817,55 @@ async function updateMyStatus(newStatus) {
         else indicator.className = "h-2 w-2 rounded-full bg-red-500";
     }
 
-    // Datenbank Update (Mit .set statt .update um 400er Fehler zu vermeiden)
     try {
+        // Benutze .set mit merge: true, um Fehler zu vermeiden
         await db.collection('users').doc(currentUser.username).set({
             status: newStatus,
             lastStatusChange: firebase.firestore.FieldValue.serverTimestamp()
-        }, { merge: true }); // <--- WICHTIG: merge: true verhindert, dass wir andere Daten überschreiben
-    } catch(e) { 
-        console.error("Status Update Fehler:", e); 
-        alert("Fehler beim Status setzen: " + e.message);
-    }
+        }, { merge: true });
+    } catch(e) { console.error("Status Update Fehler:", e); }
+}
+
+let dispatchUnsubscribe = null;
+
+function initDispatchMonitor() {
+    if(dispatchUnsubscribe) dispatchUnsubscribe();
+
+    const listLSPD = document.getElementById('dispatch-list-lspd');
+    const listLSMS = document.getElementById('dispatch-list-lsms');
+    if(!listLSPD || !listLSMS) return; 
+
+    dispatchUnsubscribe = db.collection('users').onSnapshot(snapshot => {
+        listLSPD.innerHTML = "";
+        listLSMS.innerHTML = "";
+        let cLSPD = 0, cLSMS = 0;
+
+        snapshot.forEach(doc => {
+            const u = doc.data();
+            const unitName = doc.id; // Name aus ID nehmen!
+
+            if (!u.status || u.status === '10-7') return;
+
+            let colorClass = "text-green-500 border-green-500/30 bg-green-900/10";
+            if(u.status === '10-6') colorClass = "text-yellow-500 border-yellow-500/30 bg-yellow-900/10";
+
+            // KEIN Rang mehr im HTML
+            const html = `
+                <div class="flex justify-between items-center p-3 rounded border border-slate-700 bg-slate-800 mb-2 animate-fadeIn shadow-sm">
+                    <div class="font-bold text-white text-sm pl-2">${unitName}</div>
+                    <div class="px-3 py-1 rounded text-xs font-mono font-bold border ${colorClass}">${u.status}</div>
+                </div>`;
+
+            if (u.department === 'MARSHAL' || u.department === 'LSMS' || (u.department && u.department.includes('Marshal'))) {
+                listLSMS.innerHTML += html; cLSMS++;
+            } else {
+                listLSPD.innerHTML += html; cLSPD++;
+            }
+        });
+        
+        if(document.getElementById('count-lspd')) document.getElementById('count-lspd').innerText = cLSPD;
+        if(document.getElementById('count-lsms')) document.getElementById('count-lsms').innerText = cLSMS;
+    });
 }
 
 console.log("SYSTEM GELADEN: ENDE");
