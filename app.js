@@ -163,36 +163,58 @@ function toggleTag(btn) {
 }
 
 async function searchPerson() {
-    const term = document.getElementById('search-person-input').value.toLowerCase();
+    const input = document.getElementById('search-person-input');
     const resultsDiv = document.getElementById('person-results');
-    if (!resultsDiv || term.length < 2) return;
+    
+    // Sicherheitscheck: Existieren die Elemente?
+    if (!input || !resultsDiv) return console.error("Suchfeld nicht gefunden!");
+
+    const term = input.value.trim().toLowerCase();
+
+    // Reset bei leerem Feld
+    if (term.length === 3) {
+        resultsDiv.innerHTML = "<p class='text-slate-500 col-span-3 text-center'>Geben Sie einen Namen ein...</p>";
+        return;
+    }
 
     try {
+        // Suche starten
         const snapshot = await db.collection('persons')
-            .where('lastname', '>=', term).where('lastname', '<=', term + '\uf8ff')
+            .where('lastname', '>=', term)
+            .where('lastname', '<=', term + '\uf8ff')
             .limit(10).get();
 
         resultsDiv.innerHTML = "";
+
+        if (snapshot.empty) {
+            resultsDiv.innerHTML = "<p class='text-slate-500 col-span-3 text-center'>Keine Einträge gefunden.</p>";
+            return;
+        }
+
         snapshot.forEach(doc => {
             const p = doc.data();
             const isWanted = p.tags && p.tags.includes('Wanted');
-            const borderClass = isWanted ? "border-red-500" : "border-slate-600";
             
             resultsDiv.innerHTML += `
-                <div class="glass-panel p-4 rounded border-l-4 ${borderClass} hover:bg-slate-800 transition cursor-pointer relative overflow-hidden group">
-                    <div class="absolute right-0 top-0 p-2 opacity-10 group-hover:opacity-100 transition">
-                         <span class="text-4xl">${isWanted ? '🚨' : '👤'}</span>
+                <div class="glass-panel p-4 rounded border-l-4 ${isWanted ? 'border-red-500' : 'border-slate-600'} hover:bg-slate-800 transition cursor-pointer relative group" onclick="viewProfile('${doc.id}')">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <h4 class="font-bold text-lg text-white">${p.firstname} ${p.lastname}</h4>
+                            <p class="text-xs text-slate-400 font-mono">Geb: ${p.dob}</p>
+                        </div>
+                        ${isWanted ? '<span class="animate-pulse text-xl">🚨</span>' : ''}
                     </div>
-                    <h4 class="font-bold text-lg">${p.firstname} ${p.lastname}</h4>
-                    <p class="text-xs text-slate-400 font-mono">Geb: ${p.dob} | ${p.height}cm</p>
-                    <div class="flex gap-1 mt-2 flex-wrap">
-                        ${p.tags.map(t => `<span class="px-1.5 py-0.5 rounded text-[10px] bg-slate-700 ${t==='Wanted' ? 'text-red-500 font-bold':''}">${t}</span>`).join('')}
+                    <div class="flex gap-1 mt-3 flex-wrap">
+                        ${p.tags ? p.tags.map(t => `<span class="px-2 py-0.5 rounded text-[10px] bg-slate-900 border border-slate-700 ${t==='Wanted' ? 'text-red-500 font-bold border-red-900': 'text-slate-400'}">${t}</span>`).join('') : ''}
                     </div>
                 </div>`;
         });
-    } catch (e) { console.error(e); }
+    } catch (e) {
+        console.error("Such-Fehler:", e);
+        // Tipp: Firebase Index Fehler wird hier in der Konsole (F12) angezeigt!
+        if(e.message.includes("requires an index")) alert("Datenbank-Index fehlt! Bitte Konsole (F12) prüfen und Link anklicken.");
+    }
 }
-
 async function savePerson() {
     const pData = {
         firstname: document.getElementById('p-firstname').value,
@@ -251,16 +273,29 @@ async function saveVehicle() {
     closeModal();
 }
 
-async function searchVehicle() {
-    const term = document.getElementById('search-vehicle-input').value.toUpperCase();
+aasync function searchVehicle() {
+    const input = document.getElementById('search-vehicle-input');
     const div = document.getElementById('vehicle-results');
-    if (!div || term.length < 2) return;
+    
+    if (!input || !div) return;
+    const term = input.value.trim().toUpperCase(); // Kennzeichen sind immer Groß
 
-    const snapshot = await db.collection('vehicles').where('plate', '>=', term).limit(5).get();
+    if (term.length === 0) {
+        div.innerHTML = "<p class='text-slate-500 col-span-3 text-center'>Kennzeichen eingeben...</p>";
+        return;
+    }
+
+    const snapshot = await db.collection('vehicles').where('plate', '>=', term).where('plate', '<=', term + '\uf8ff').limit(10).get();
     div.innerHTML = "";
     
+    if (snapshot.empty) {
+        div.innerHTML = "<p class='text-slate-500 col-span-3 text-center'>Kein Fahrzeug gefunden.</p>";
+        return;
+    }
+
     snapshot.forEach(async doc => {
         const v = doc.data();
+        // Besitzer Name laden (optional, aber schick)
         let ownerName = "Unbekannt";
         if(v.ownerId) {
             const oDoc = await db.collection('persons').doc(v.ownerId).get();
@@ -268,13 +303,15 @@ async function searchVehicle() {
         }
 
         div.innerHTML += `
-            <div class="glass-panel p-4 rounded border-l-4 border-yellow-500">
-                <div class="flex justify-between">
-                    <span class="bg-yellow-500 text-black font-bold px-2 rounded text-sm">${v.plate}</span>
-                    <span class="text-xs text-slate-400">${v.model}</span>
+            <div class="glass-panel p-4 rounded border-l-4 border-yellow-500 hover:bg-slate-800 transition">
+                <div class="flex justify-between items-center mb-2">
+                    <span class="bg-yellow-500 text-black font-bold px-2 py-0.5 rounded text-sm font-mono">${v.plate}</span>
+                    <span class="text-xs text-slate-400">${v.model || 'Fahrzeug'}</span>
                 </div>
-                <p class="mt-2 text-sm text-slate-300">Farbe: ${v.color}</p>
-                <p class="text-sm font-bold text-blue-400">Halter: ${ownerName}</p>
+                <p class="text-xs text-slate-300">Farbe: <span class="text-white">${v.color}</span></p>
+                <p class="text-xs text-blue-400 mt-2 font-bold cursor-pointer hover:underline" onclick="showPage('persons'); setTimeout(() => {document.getElementById('search-person-input').value='${ownerName.split(' ')[1]}'; searchPerson()}, 500)">
+                    👤 ${ownerName}
+                </p>
             </div>`;
     });
 }
@@ -372,17 +409,28 @@ function filterReports(filter) {
 function startWantedListener() {
     db.collection('persons').where('tags', 'array-contains', 'Wanted').onSnapshot(snap => {
         const tbody = document.getElementById('wanted-list-body');
-        document.getElementById('stat-wanted-count').innerText = snap.size;
+        if(document.getElementById('stat-wanted-count')) {
+            document.getElementById('stat-wanted-count').innerText = snap.size;
+        }
         tbody.innerHTML = "";
         
         snap.forEach(doc => {
             const p = doc.data();
+            // HIER WAR DER FEHLER: Der Button braucht einen onclick-Befehl
             tbody.innerHTML += `
-                <tr class="hover:bg-slate-800/50 transition">
-                    <td class="p-4 font-bold text-white">${p.firstname} ${p.lastname}</td>
-                    <td class="text-red-400">Gesucht</td>
-                    <td class="font-mono text-slate-400">Heute</td>
-                    <td class="text-right p-4"><button class="text-xs bg-slate-700 px-2 py-1 rounded">Akte</button></td>
+                <tr class="hover:bg-slate-800/50 transition border-b border-slate-800">
+                    <td class="p-4 font-bold text-white">
+                        ${p.firstname} ${p.lastname}
+                        <span class="block text-[10px] text-slate-500 font-normal">${p.alias || ''}</span>
+                    </td>
+                    <td class="text-red-400 font-mono text-xs uppercase tracking-wider">Gesucht</td>
+                    <td class="font-mono text-slate-400 text-xs">Aktuell</td>
+                    <td class="text-right p-4">
+                        <button onclick="showPage('persons'); setTimeout(() => { document.getElementById('search-person-input').value = '${p.lastname}'; searchPerson(); }, 500);" 
+                        class="text-xs bg-slate-700 hover:bg-slate-600 text-white px-3 py-1 rounded transition">
+                            Akte öffnen
+                        </button>
+                    </td>
                 </tr>`;
         });
     });
@@ -459,6 +507,41 @@ async function uiRegisterEmployee() {
     await db.collection('users').doc(u).set({ password: p, department: d, rank: r });
     alert("Angelegt.");
     renderEmployeePanel();
+}
+
+async function viewProfile(personId) {
+    // 1. Modal öffnen
+    const modal = document.getElementById('modal-person');
+    modal.classList.remove('hidden');
+    
+    // 2. Daten laden
+    const doc = await db.collection('persons').doc(personId).get();
+    if (!doc.exists) return alert("Fehler: Akte nicht gefunden.");
+    
+    const p = doc.data();
+    
+    // 3. Formular befüllen (Read-Only Modus simulieren oder bearbeitbar lassen)
+    document.getElementById('p-firstname').value = p.firstname;
+    document.getElementById('p-lastname').value = p.lastname;
+    document.getElementById('p-dob').value = p.dob;
+    document.getElementById('p-height').value = p.height;
+    
+    // 4. Tags setzen
+    selectedTags = p.tags || []; // Globale Variable setzen
+    document.querySelectorAll('.tag-btn').forEach(btn => {
+        const tag = btn.getAttribute('data-tag');
+        // Reset Style
+        btn.classList.remove('bg-blue-600', 'bg-red-600', 'text-white', 'shadow-lg');
+        
+        // Set Style wenn Tag aktiv
+        if (selectedTags.includes(tag)) {
+            if (tag === 'Wanted') btn.classList.add('bg-red-600', 'text-white', 'shadow-lg');
+            else btn.classList.add('bg-blue-600', 'text-white', 'shadow-lg');
+        }
+    });
+    
+    // Optional: Ändere den "Speichern" Button zu "Aktualisieren"
+    // (Hier lassen wir es einfach, da savePerson() mit merge:true arbeitet und somit updated)
 }
 
 async function removeUser(id) {
