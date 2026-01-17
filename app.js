@@ -214,27 +214,53 @@ async function viewProfile(personId) {
 
 // --- 5. FAHRZEUGE ---
 async function liveSearchOwner(query) {
-    if (query.length < 2) return;
     const dropdown = document.getElementById('owner-dropdown');
-    const snapshot = await db.collection('persons').where('lastname', '>=', query.toLowerCase()).limit(5).get();
     
-    dropdown.innerHTML = "";
-    dropdown.classList.remove('hidden');
-    
-    snapshot.forEach(doc => {
-        const p = doc.data();
-        const div = document.createElement('div');
-        div.className = "p-2 hover:bg-slate-700 cursor-pointer text-xs";
-        div.innerText = `${p.firstname} ${p.lastname}`;
-        div.onclick = () => {
-            document.getElementById('v-owner-id').value = doc.id;
-            document.getElementById('selected-owner-display').innerText = `Besitzer: ${p.firstname} ${p.lastname}`;
-            dropdown.classList.add('hidden');
-        };
-        dropdown.appendChild(div);
-    });
-}
+    // Wenn weniger als 2 Zeichen getippt: Ausblenden
+    if (!query || query.length < 2) {
+        dropdown.classList.add('hidden');
+        dropdown.innerHTML = "";
+        return;
+    }
 
+    try {
+        // FIX: Wir suchen jetzt im 'searchKey' (kleingeschrieben), damit er "Muster" auch findet, wenn man "muster" tippt.
+        const snapshot = await db.collection('persons')
+            .where('searchKey', '>=', query.toLowerCase())
+            .where('searchKey', '<=', query.toLowerCase() + '\uf8ff')
+            .limit(5).get();
+        
+        dropdown.innerHTML = "";
+        dropdown.classList.remove('hidden');
+        
+        if (snapshot.empty) {
+            dropdown.innerHTML = "<div class='p-2 text-xs text-slate-500 bg-slate-800'>Keine Person gefunden</div>";
+            return;
+        }
+
+        snapshot.forEach(doc => {
+            const p = doc.data();
+            const div = document.createElement('div');
+            // Styling für die Liste
+            div.className = "p-3 hover:bg-blue-600 cursor-pointer border-b border-slate-700 text-xs bg-slate-900 text-white font-bold";
+            div.innerText = `${p.firstname} ${p.lastname}`;
+            
+            // Klick auf einen Namen
+            div.onclick = () => {
+                document.getElementById('v-owner-id').value = doc.id;
+                document.getElementById('selected-owner-display').innerText = `Besitzer gewählt: ${p.firstname} ${p.lastname}`;
+                document.getElementById('selected-owner-display').className = "text-green-400 font-bold text-sm mt-2";
+                
+                // Dropdown schließen und Suchfeld leeren
+                dropdown.classList.add('hidden');
+                document.getElementById('v-owner-search').value = ""; 
+            };
+            dropdown.appendChild(div);
+        });
+    } catch (e) {
+        console.error("Owner Search Error:", e);
+    }
+}
 async function saveVehicle() {
     const plate = document.getElementById('v-plate').value.toUpperCase();
     if (!plate) return alert("Kennzeichen fehlt.");
