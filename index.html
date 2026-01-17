@@ -464,6 +464,50 @@
     </div>
 </div>
 
+<div class="modal fade" id="penalCodeModal" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content bg-dark text-white">
+            <div class="modal-header">
+                <h5 class="modal-title">Eintrag erstellen & Strafmaß berechnen</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row">
+                    <div class="col-md-7 border-end border-secondary">
+                        <input type="text" id="modalLawSearch" class="form-control mb-3" placeholder="Gesetz suchen..." onkeyup="filterModalLaws()">
+                        <div id="modal-law-list" class="list-group" style="height: 400px; overflow-y: auto;">
+                            </div>
+                    </div>
+                    <div class="col-md-5">
+                        <h6 class="text-muted">Ausgewählte Vergehen</h6>
+                        <ul id="modal-selected-laws" class="list-group mb-3"></ul>
+                        
+                        <div class="mb-3">
+                            <label>Haftminderung / Anpassung (%)</label>
+                            <input type="range" class="form-range" id="modalFineAdj" min="0" max="100" value="100" oninput="updateModalCalc()">
+                            <div class="text-end" id="modalAdjText">100%</div>
+                        </div>
+
+                        <div class="card bg-secondary mb-3">
+                            <div class="card-body">
+                                <h3>Strafe: <span id="modalTotalFine">$0</span></h3>
+                                <h3>Haft: <span id="modalTotalJail">0 Monate</span></h3>
+                            </div>
+                        </div>
+                        
+                        <div class="mb-2">
+                            <label>Zusatz-Notiz (Optional)</label>
+                            <textarea id="modalRecordNote" class="form-control" rows="2"></textarea>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-danger" onclick="submitRecordFromModal()">Eintrag Speichern & Signieren</button>
+            </div>
+        </div>
+    </div>
+</div>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
@@ -1191,6 +1235,171 @@ async function searchVehicle() {
                 </div>
             </div>`;
     });
+}
+
+
+// ==========================================
+// FIX: ERMITTLUNGEN & NEUER STRAFRECHNER
+// ==========================================
+
+// 1. Die fehlende Funktion "addInvestigation" (Fix für den Fehler)
+async function addInvestigation() {
+    // Einfache Abfrage für den Titel der Ermittlung
+    const title = prompt("Titel der neuen Ermittlung (z.B. 'Drogenring Vagos'):");
+    if(!title) return;
+
+    try {
+        await db.collection('civilians').doc(currentPersonId).collection('investigations').add({
+            title: title,
+            status: "Offen", // Offen, Geschlossen, Vor Gericht
+            officer: currentUser.username,
+            notes: "Ermittlung gestartet.",
+            date: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        
+        // Liste aktualisieren
+        loadPersonInvestigations(currentPersonId);
+    } catch (e) {
+        alert("Fehler: " + e.message);
+    }
+}
+
+// 2. Das neue "Akte hinzufügen" mit Strafrechner
+// Überschreibe die alte 'addRecordEntry' Funktion hiermit:
+
+let modalSelectedLaws = []; // Zwischenspeicher für das Modal
+
+function addRecordEntry() {
+    // Reset Data
+    modalSelectedLaws = [];
+    document.getElementById('modalLawSearch').value = "";
+    document.getElementById('modalRecordNote').value = "";
+    document.getElementById('modalFineAdj').value = 100;
+    
+    // UI Render
+    renderModalLaws();
+    updateModalCalc();
+    
+    // Modal öffnen (über dem anderen Modal)
+    new bootstrap.Modal(document.getElementById('penalCodeModal')).show();
+}
+
+function renderModalLaws() {
+    const list = document.getElementById('modal-law-list');
+    const search = document.getElementById('modalLawSearch').value.toLowerCase();
+    list.innerHTML = "";
+
+    penalCodeDB.forEach(law => {
+        // Filter Logik
+        if(law.de.toLowerCase().includes(search) || law.id.toLowerCase().includes(search)) {
+            list.innerHTML += `
+                <button class="list-group-item list-group-item-action bg-dark text-white border-secondary" 
+                    onclick="addLawToModal('${law.id}')">
+                    <div class="d-flex justify-content-between">
+                        <strong>${law.id}</strong>
+                        <span class="badge bg-secondary">$${law.fine} | ${law.months} Mon.</span>
+                    </div>
+                    <small>${law.de}</small>
+                </button>`;
+        }
+    });
+}
+
+// Filter Event (für das Suchfeld im Modal)
+function filterModalLaws() {
+    renderModalLaws();
+}
+
+function addLawToModal(lawId) {
+    const law = penalCodeDB.find(l => l.id === lawId);
+    modalSelectedLaws.push(law);
+    updateModalCalc();
+}
+
+function removeLawFromModal(index) {
+    modalSelectedLaws.splice(index, 1);
+    updateModalCalc();
+}
+
+function updateModalCalc() {
+    const list = document.getElementById('modal-selected-laws');
+    const perc = parseInt(document.getElementById('modalFineAdj').value);
+    document.getElementById('modalAdjText').innerText = perc + "%";
+
+    let totalFine = 0;
+    let totalJail = 0;
+    
+    list.innerHTML = ""; // Clear list
+
+    modalSelectedLaws.forEach((law, index) => {
+        const adjFine = (law.fine * perc) / 100;
+        const adjJail = (law.months * perc) / 100; // Optional: Haft auch prozentual oder fix lassen? Hier beides angepasst.
+        
+        totalFine += adjFine;
+        totalJail += law.months; // Haftzeit kürzt man oft nicht automatisch, aber Geldstrafe schon. Ich lasse Haft hier "Raw".
+
+        list.innerHTML += `
+            <li class="list-group-item bg-dark text-white d-flex justify-content-between p-1">
+                <small>${law.de}</small>
+                <i class="fas fa-times text-danger pointer" onclick="removeLawFromModal(${index})"></i>
+            </li>`;
+    });
+
+    // Final Calculation with percentage applied to Fine Only (üblich in RP)
+    const finalFine = (totalFine * perc) / 100;
+
+    document.getElementById('modalTotalFine').innerText = "$" + finalFine.toFixed(0);
+    document.getElementById('modalTotalJail').innerText = totalJail + " Mon.";
+}
+
+// 3. Speichern in die Datenbank
+async function submitRecordFromModal() {
+    if(modalSelectedLaws.length === 0) {
+        alert("Bitte mindestens ein Gesetz auswählen.");
+        return;
+    }
+
+    const note = document.getElementById('modalRecordNote').value;
+    const perc = parseInt(document.getElementById('modalFineAdj').value);
+    
+    // Berechnen
+    let rawFine = 0;
+    let totalJail = 0;
+    let lawNames = [];
+
+    modalSelectedLaws.forEach(l => {
+        rawFine += l.fine;
+        totalJail += l.months;
+        lawNames.push(l.id + " " + l.de); // Liste der Gesetze als String speichern
+    });
+
+    const finalFine = (rawFine * perc) / 100;
+    const reasonString = lawNames.join(', ') + (note ? " | Notiz: " + note : "");
+
+    try {
+        await db.collection('civilians').doc(currentPersonId).collection('records').add({
+            reason: reasonString, // Alle Gesetze als Text
+            fine: finalFine,
+            jail: totalJail,
+            officer: currentUser.username,
+            adjustment: perc,
+            date: firebase.firestore.FieldValue.serverTimestamp()
+        });
+
+        // Schließen und Refresh
+        bootstrap.Modal.getInstance(document.getElementById('penalCodeModal')).hide();
+        loadPersonRecords(currentPersonId); // Die Liste in der Akte aktualisieren
+        
+        // Optional: Automatisch "Wanted" Tag setzen, wenn Haftzeit > 0
+        if(totalJail > 0) {
+            // (Hier könnte man noch Logik einbauen, um den Tag automatisch zu setzen)
+            alert("Eintrag gespeichert! Person sollte inhaftiert werden.");
+        }
+
+    } catch(e) {
+        console.error(e);
+        alert("Fehler beim Speichern: " + e.message);
+    }
 }
         
     </script>
