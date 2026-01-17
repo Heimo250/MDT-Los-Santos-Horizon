@@ -677,7 +677,7 @@ function initDispatchMonitor() {
 
     const listLSPD = document.getElementById('dispatch-list-lspd');
     const listLSMS = document.getElementById('dispatch-list-lsms');
-    if(!listLSPD || !listLSMS) return; // Schutz, falls Seite nicht geladen
+    if(!listLSPD || !listLSMS) return; 
 
     dispatchUnsubscribe = db.collection('users').onSnapshot(snapshot => {
         listLSPD.innerHTML = "";
@@ -686,16 +686,25 @@ function initDispatchMonitor() {
 
         snapshot.forEach(doc => {
             const u = doc.data();
+            
+            // FIX 1: Der Name ist die ID des Dokuments!
+            const unitName = doc.id; 
+
             // Nur anzeigen, wer nicht 10-7 (Offline) ist
             if (!u.status || u.status === '10-7') return;
 
             let color = "text-green-500 border-green-500/30 bg-green-900/10";
             if(u.status === '10-6') color = "text-yellow-500 border-yellow-500/30 bg-yellow-900/10";
 
+            // FIX 2: Rang entfernt, Name korrigiert
             const html = `
-                <div class="flex justify-between items-center p-2 rounded border border-slate-700 bg-slate-800 mb-1">
-                    <div><span class="font-bold text-white text-xs">${u.username}</span> <span class="text-[10px] text-slate-400">(${u.rank||'Officer'})</span></div>
-                    <div class="px-2 py-0.5 rounded text-[10px] font-bold border ${color}">${u.status}</div>
+                <div class="flex justify-between items-center p-2 rounded border border-slate-700 bg-slate-800 mb-1 animate-fadeIn">
+                    <div class="font-bold text-white text-xs pl-2">
+                        ${unitName}
+                    </div>
+                    <div class="px-2 py-0.5 rounded text-[10px] font-bold border ${color}">
+                        ${u.status}
+                    </div>
                 </div>`;
 
             // Trennung Marshals vs LSPD
