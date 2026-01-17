@@ -3,12 +3,12 @@
 // ==========================================
 const firebaseConfig = {
     // FÜGE HIER DEINE DATEN EIN
-    apiKey: "AIzaSy...",
-    authDomain: "dein-projekt.firebaseapp.com",
-    projectId: "dein-projekt",
-    storageBucket: "dein-projekt.appspot.com",
-    messagingSenderId: "...",
-    appId: "..."
+      apiKey: "AIzaSyD6I01je_MrT7KzeFE7BD1IGc4amukK_6Q",
+  authDomain: "mdt-system-c18ea.firebaseapp.com",
+  projectId: "mdt-system-c18ea",
+  storageBucket: "mdt-system-c18ea.firebasestorage.app",
+  messagingSenderId: "548167432149",
+  appId: "1:548167432149:web:be1a0154c825faca622f5c"
 };
 
 // Schutz gegen mehrfaches Initialisieren
