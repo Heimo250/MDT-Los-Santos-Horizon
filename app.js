@@ -239,38 +239,64 @@ async function viewProfile(personId) {
         }
     } catch(e) { console.error("Vehicle Load Error", e); }
 
-    // 3. BERICHTE LADEN (Textsuche nach Nachname)
-    // Hinweis: Das sucht in den letzten 50 Berichten nach dem Namen.
+    // 3. AKTEN & BERICHTE LADEN (Kombiniert)
     const rList = document.getElementById('p-report-list');
-    rList.innerHTML = "<span class='text-xs text-slate-500 animate-pulse'>Durchsuche Akten...</span>";
+    rList.innerHTML = "<span class='text-xs text-slate-500 animate-pulse'>Lade Akten...</span>";
 
     try {
-        const rSnap = await db.collection('reports').orderBy('timestamp', 'desc').limit(50).get();
         rList.innerHTML = "";
-        let foundCount = 0;
+        
+        // A) Hole Strafakten (Criminal Records) - Die sind wichtiger, kommen nach oben
+        const crSnap = await db.collection('criminal_records')
+                               .where('suspectId', '==', doc.id)
+                               .orderBy('timestamp', 'desc').get();
+                               
+        if(!crSnap.empty) {
+            rList.innerHTML += "<div class='text-[10px] uppercase font-bold text-red-500 mb-1 mt-2'>Strafakten</div>";
+            crSnap.forEach(rDoc => {
+                const r = rDoc.data();
+                rList.innerHTML += `
+                    <div class="bg-red-900/20 p-2 rounded border-l-2 border-red-500 mb-2 cursor-pointer hover:bg-slate-800" onclick="alert('${r.content.replace(/\n/g, "\\n")}')">
+                        <div class="flex justify-between text-[10px] text-slate-500">
+                            <span>${r.officer}</span>
+                            <span>${r.date.replace('T', ' ')}</span>
+                        </div>
+                        <div class="text-xs font-bold text-white truncate">⚖️ ${r.title}</div>
+                    </div>`;
+            });
+        }
+
+        // B) Hole normale Berichte (Textsuche nach Nachname wie vorher)
+        const rSnap = await db.collection('reports').orderBy('timestamp', 'desc').limit(50).get();
+        let foundReport = false;
+        
+        // Kleiner Header für Berichte
+        const reportHeaderDiv = document.createElement('div');
+        reportHeaderDiv.innerHTML = "<div class='text-[10px] uppercase font-bold text-blue-500 mb-1 mt-2'>Erwähnungen in Berichten</div>";
+        let hasHeaderAppended = false;
 
         rSnap.forEach(rDoc => {
             const r = rDoc.data();
-            // Prüfen ob der Nachname im Betreff oder Inhalt vorkommt
             if ( (r.subject && r.subject.includes(currentLastname)) || (r.content && r.content.includes(currentLastname)) ) {
-                foundCount++;
-                const dateStr = r.timestamp ? r.timestamp.toDate().toLocaleDateString() : 'N/A';
+                if(!hasHeaderAppended) { rList.appendChild(reportHeaderDiv); hasHeaderAppended = true; }
+                
                 rList.innerHTML += `
-                    <div class="bg-slate-900 p-2 rounded border-l-2 border-blue-500 cursor-pointer hover:bg-slate-800" onclick="alert('${r.content.replace(/\n/g, "\\n")}')">
+                    <div class="bg-slate-900 p-2 rounded border-l-2 border-blue-500 mb-1 cursor-pointer hover:bg-slate-800" onclick="alert('${r.content.replace(/\n/g, "\\n")}')">
                         <div class="flex justify-between text-[10px] text-slate-500">
-                            <span>${r.reportId}</span>
-                            <span>${dateStr}</span>
+                            <span>${r.deptPrefix}</span>
+                            <span>${r.timestamp ? r.timestamp.toDate().toLocaleDateString() : 'N/A'}</span>
                         </div>
-                        <div class="text-xs font-bold text-slate-300 truncate">${r.subject}</div>
+                        <div class="text-xs font-bold text-slate-300 truncate">📄 ${r.subject}</div>
                     </div>`;
+                foundReport = true;
             }
         });
 
-        if (foundCount === 0) {
-            rList.innerHTML = "<span class='text-xs text-slate-500'>Keine Erwähnungen gefunden.</span>";
+        if (crSnap.empty && !foundReport) {
+            rList.innerHTML = "<span class='text-xs text-slate-500'>Keine Einträge vorhanden.</span>";
         }
-    } catch(e) { console.error("Report Load Error", e); }
-}
+        
+    } catch(e) { console.error("History Load Error", e); }
 
 // --- 5. FAHRZEUGE ---
 async function liveSearchOwner(query) {
@@ -600,6 +626,142 @@ async function saveIACase() {
     alert("IA Fall angelegt.");
     closeModal();
     loadIACases();
+}
+
+// ==========================================
+// 10. AKTENEINTRÄGE (CRIMINAL RECORDS)
+// ==========================================
+
+// A. Die Suchfunktion (Kopie von Vehicle Search, angepasst)
+async function liveSearchSuspectRecord(query) {
+    const dropdown = document.getElementById('record-suspect-dropdown');
+    
+    if (!query || query.length < 2) {
+        dropdown.classList.add('hidden');
+        return;
+    }
+
+    try {
+        const snapshot = await db.collection('persons')
+            .where('searchKey', '>=', query.toLowerCase())
+            .where('searchKey', '<=', query.toLowerCase() + '\uf8ff')
+            .limit(5).get();
+        
+        dropdown.innerHTML = "";
+        dropdown.classList.remove('hidden');
+        
+        if (snapshot.empty) {
+            dropdown.innerHTML = "<div class='p-3 text-xs text-slate-500'>Keine Person gefunden</div>";
+            return;
+        }
+
+        snapshot.forEach(doc => {
+            const p = doc.data();
+            const div = document.createElement('div');
+            div.className = "p-3 hover:bg-blue-600 cursor-pointer border-b border-slate-700 text-sm bg-slate-800 text-white font-bold flex justify-between";
+            div.innerHTML = `<span>${p.firstname} ${p.lastname}</span> <span class="text-slate-400 font-mono text-xs">${p.dob}</span>`;
+            
+            div.onclick = () => {
+                selectSuspectForRecord(doc.id, `${p.firstname} ${p.lastname}`);
+            };
+            dropdown.appendChild(div);
+        });
+    } catch (e) { console.error(e); }
+}
+
+// B. Auswahl & Vorlage laden
+function selectSuspectForRecord(id, name) {
+    // 1. UI Umschalten
+    document.getElementById('record-suspect-dropdown').classList.add('hidden');
+    document.getElementById('record-step-1').classList.add('hidden');
+    document.getElementById('record-step-2').classList.remove('hidden');
+
+    // 2. Daten setzen
+    document.getElementById('record-suspect-name').innerText = name;
+    document.getElementById('record-suspect-id').value = id;
+    document.getElementById('record-signature').innerText = currentUser.username; // Auto-Unterschrift
+    
+    // Aktuelles Datum setzen
+    const now = new Date();
+    const dateStr = now.toLocaleDateString('de-DE');
+    const timeStr = now.toLocaleTimeString('de-DE', {hour: '2-digit', minute:'2-digit'});
+    
+    // ISO String für das Input-Feld (etwas tricky in JS)
+    const isoString = new Date(now.getTime() - (now.getTimezoneOffset() * 60000)).toISOString().slice(0,16);
+    document.getElementById('record-time').value = isoString;
+
+    // 3. VORLAGE EINFÜGEN
+    const template = `TATORT, DATUM UND UHRZEIT:
+PLZ ____, am ${dateStr} um ${timeStr} Uhr
+
+BESCHLAGNAHMTE GEGENSTÄNDE (Was wurde abgenommen?):
+- 
+
+SACHVERHALT:
+Was ist passiert? (So kurz wie möglich, so informativ wie nötig):
+
+
+WER WAR DABEI (z.B. USMS, SMC etc.):
+
+
+FESTNEHMENDER BEAMTER (DN + Name):
+${currentUser.username}
+
+BETEILIGTE BEAMTE (DN + Name):
+- 
+
+ZEUGEN (Name, ggf. Telefonnummer):
+/
+
+RECHTE VERLESEN (DN + Name):
+Die Mirandawarnung wurde durch ${currentUser.username} am ${dateStr} um ${timeStr} Uhr verlesen.
+
+VERMERKE:
+[ ] Kooperatives Verhalten
+[ ] Nicht Kooperatives Verhalten`;
+
+    document.getElementById('record-content').value = template;
+}
+
+// C. Reset Funktion (Zurück zur Suche)
+function resetRecordForm() {
+    document.getElementById('record-step-2').classList.add('hidden');
+    document.getElementById('record-step-1').classList.remove('hidden');
+    document.getElementById('record-suspect-search').value = "";
+    document.getElementById('record-title').value = "";
+}
+
+// D. Speichern
+async function saveCriminalRecord() {
+    const suspectId = document.getElementById('record-suspect-id').value;
+    const suspectName = document.getElementById('record-suspect-name').innerText;
+    const title = document.getElementById('record-title').value;
+    const content = document.getElementById('record-content').value;
+    const timeVal = document.getElementById('record-time').value;
+
+    if (!title || content.length < 20) return alert("Bitte Titel und Sachverhalt ausfüllen.");
+
+    // Wir speichern es in einer neuen Collection 'criminal_records'
+    // UND wir speichern den Author mit, für die Signatur
+    try {
+        await db.collection('criminal_records').add({
+            suspectId: suspectId,      // Verknüpfung zur Person!
+            suspectName: suspectName,  // Backup Name
+            title: title,
+            content: content,
+            date: timeVal,
+            officer: currentUser.username, // Signatur
+            officerRank: currentUser.rank,
+            department: currentUser.department,
+            timestamp: firebase.firestore.FieldValue.serverTimestamp()
+        });
+
+        alert("Akte erfolgreich angelegt und signiert.");
+        resetRecordForm();
+    } catch (e) {
+        console.error(e);
+        alert("Fehler beim Speichern: " + e.message);
+    }
 }
 
 console.log("APP JS ENDE ERREICHT");
