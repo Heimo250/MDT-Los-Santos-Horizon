@@ -166,15 +166,12 @@ async function searchPerson() {
     
     if (!resultsDiv) return;
 
-    // Wir suchen nach dem kleingeschriebenen Begriff
     const term = input.value.trim().toLowerCase();
 
     try {
         let query = db.collection('persons');
 
-        // Nur filtern, wenn auch was getippt wurde
         if (term.length > 0) {
-            // Wir suchen im neuen Feld 'searchKey' statt 'lastname'
             query = query.where('searchKey', '>=', term)
                          .where('searchKey', '<=', term + '\uf8ff');
         }
@@ -214,18 +211,15 @@ async function searchPerson() {
     }
 }
 
-// A. PERSON SPEICHERN (Mit Such-Hilfe)
 async function savePerson() {
     const firstname = document.getElementById('p-firstname').value;
     const lastname = document.getElementById('p-lastname').value;
     
-    // Validierung
     if(!lastname) return alert("Nachname fehlt.");
     
     const pData = {
         firstname: firstname,
         lastname: lastname,
-        // WICHTIG: Wir erstellen ein Feld extra für die Suche in Kleinschrift
         searchKey: lastname.toLowerCase(), 
         dob: document.getElementById('p-dob').value,
         height: document.getElementById('p-height').value,
@@ -233,14 +227,12 @@ async function savePerson() {
         createdAt: firebase.firestore.FieldValue.serverTimestamp()
     };
     
-    // Doc-ID erstellen (z.B. max_mustermann)
     const docId = `${firstname}_${lastname}`.toLowerCase().replace(/\s/g, '');
     
     try {
         await db.collection('persons').doc(docId).set(pData, { merge: true });
         alert("Person gespeichert!");
         closeModal();
-        // Leere das Suchfeld und lade die Liste neu
         document.getElementById('search-person-input').value = lastname;
         searchPerson(); 
     } catch (e) {
@@ -250,23 +242,19 @@ async function savePerson() {
 }
 
 async function viewProfile(personId) {
-    // 1. Modal öffnen
     const modal = document.getElementById('modal-person');
-    modal.classList.remove('hidden');
+    if(modal) modal.classList.remove('hidden');
     
-    // 2. Daten laden
     const doc = await db.collection('persons').doc(personId).get();
     if (!doc.exists) return alert("Fehler: Akte nicht gefunden.");
     
     const p = doc.data();
     
-    // 3. Formular befüllen
     document.getElementById('p-firstname').value = p.firstname;
     document.getElementById('p-lastname').value = p.lastname;
     document.getElementById('p-dob').value = p.dob;
     document.getElementById('p-height').value = p.height;
     
-    // 4. Tags setzen
     selectedTags = p.tags || []; 
     document.querySelectorAll('.tag-btn').forEach(btn => {
         const tag = btn.getAttribute('data-tag');
@@ -343,7 +331,6 @@ async function searchVehicle() {
         return;
     }
 
-    // ACHTUNG: Hier async nutzen, da wir drinnen warten (await)
     snapshot.forEach(async doc => {
         const v = doc.data();
         let ownerName = "Unbekannt";
@@ -384,9 +371,259 @@ async function openReportModal() {
         header.classList.add('text-blue-500');
     }
 
-    // ID Generieren
     const snap = await db.collection('reports').get();
     const id = `${prefix}-${String(snap.size + 1000).padStart(4, '0')}`;
     
-    document.getElementById('r-id-preview
-                            
+    document.getElementById('r-id-preview').innerText = id;
+    document.getElementById('r-officers').value = currentUser.username;
+    
+    let tpl = "SITUATION:\n\n\nMASSNAHMEN:\n\n\nERGEBNIS:"; 
+    if(currentUser.rank.includes("Detektiv")) tpl = "ERMITTLUNGSPROTOKOLL\n\nTATVERDACHT:\n\nBEWEISE:\n\nVERLAUF:";
+    document.getElementById('r-content').value = tpl;
+
+    document.getElementById('modal-report').classList.remove('hidden');
+}
+
+async function saveReport() {
+    const id = document.getElementById('r-id-preview').innerText;
+    const content = document.getElementById('r-content').value;
+    const subj = document.getElementById('r-subject').value;
+    
+    if(!subj) return alert("Betreff fehlt.");
+
+    await db.collection('reports').doc(id).set({
+        reportId: id,
+        deptPrefix: id.split('-')[0],
+        subject: subj,
+        content: content,
+        author: currentUser.username,
+        rank: currentUser.rank,
+        location: document.getElementById('r-location').value,
+        timestamp: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    alert("Archiviert.");
+    closeModal();
+    loadReports();
+}
+
+async function loadReports() {
+    const list = document.getElementById('report-list');
+    const query = db.collection('reports').orderBy('timestamp', 'desc').limit(20);
+    const snap = await query.get();
+    
+    list.innerHTML = "";
+    document.getElementById('stat-report-count').innerText = snap.size; 
+
+    snap.forEach(doc => {
+        const r = doc.data();
+        if (currentReportFilter !== 'ALL' && r.deptPrefix !== currentReportFilter) return;
+
+        const isMarshal = r.deptPrefix === "LSMS";
+        const color = isMarshal ? "border-amber-600 text-amber-500" : "border-blue-600 text-blue-400";
+
+        list.innerHTML += `
+            <div class="glass-panel p-3 rounded border-l-4 ${color.split(' ')[0]} hover:bg-slate-800 cursor-pointer">
+                 <div class="flex justify-between">
+                     <span class="text-xs font-bold ${color.split(' ')[1]} border border-current px-1 rounded">${r.deptPrefix}</span>
+                     <span class="text-xs text-slate-500 font-mono">${r.timestamp ? r.timestamp.toDate().toLocaleDateString() : ''}</span>
+                 </div>
+                 <h4 class="font-bold text-slate-200">${r.subject}</h4>
+                 <p class="text-xs text-slate-400">Von: ${r.author} (${r.rank})</p>
+            </div>
+        `;
+    });
+}
+
+function filterReports(filter) {
+    currentReportFilter = filter;
+    loadReports();
+}
+
+// ==========================================
+// 7. WANTED LISTENER & CALCULATOR
+// ==========================================
+function startWantedListener() {
+    db.collection('persons').where('tags', 'array-contains', 'Wanted').onSnapshot(snap => {
+        const tbody = document.getElementById('wanted-list-body');
+        if(document.getElementById('stat-wanted-count')) {
+            document.getElementById('stat-wanted-count').innerText = snap.size;
+        }
+        tbody.innerHTML = "";
+        
+        snap.forEach(doc => {
+            const p = doc.data();
+            tbody.innerHTML += `
+                <tr class="hover:bg-slate-800/50 transition border-b border-slate-800">
+                    <td class="p-4 font-bold text-white">
+                        ${p.firstname} ${p.lastname}
+                        <span class="block text-[10px] text-slate-500 font-normal">${p.alias || ''}</span>
+                    </td>
+                    <td class="text-red-400 font-mono text-xs uppercase tracking-wider">Gesucht</td>
+                    <td class="font-mono text-slate-400 text-xs">Aktuell</td>
+                    <td class="text-right p-4">
+                        <button onclick="showPage('persons'); setTimeout(() => { document.getElementById('search-person-input').value = '${p.lastname}'; searchPerson(); }, 500);" 
+                        class="text-xs bg-slate-700 hover:bg-slate-600 text-white px-3 py-1 rounded transition">
+                            Akte öffnen
+                        </button>
+                    </td>
+                </tr>`;
+        });
+    });
+}
+
+const LAWS = [
+    { id: "§1", name: "Speeding", price: 500, jail: 0 },
+    { id: "§2", name: "Körperverletzung", price: 2500, jail: 10 },
+    { id: "§3", name: "Mord", price: 50000, jail: 120 },
+];
+let cart = [];
+
+function loadLaws() {
+    const div = document.getElementById('law-list');
+    div.innerHTML = LAWS.map(l => `
+        <div class="p-2 hover:bg-slate-700 cursor-pointer flex justify-between text-xs" onclick="addToCart('${l.id}')">
+            <span>${l.name}</span> <span class="text-green-400">$${l.price}</span>
+        </div>
+    `).join('');
+}
+
+function addToCart(id) {
+    const law = LAWS.find(l => l.id === id);
+    cart.push(law);
+    renderCart();
+}
+
+function renderCart() {
+    const div = document.getElementById('calc-cart');
+    div.innerHTML = cart.map((c, i) => `
+        <div class="flex justify-between text-xs p-1 border-b border-slate-700">
+            <span>${c.name}</span> <button onclick="cart.splice(${i},1);renderCart()" class="text-red-500">x</button>
+        </div>
+    `).join('');
+    updateTotal();
+}
+
+function updateTotal() {
+    let sum = cart.reduce((a, b) => a + b.price, 0);
+    let jail = cart.reduce((a, b) => a + b.jail, 0);
+    const perc = document.getElementById('calc-percent').value / 100;
+    
+    document.getElementById('calc-total').innerText = "$" + (sum * perc).toFixed(0);
+    document.getElementById('calc-jail').value = jail;
+}
+
+// ==========================================
+// 8. EMPLOYEE MANAGEMENT
+// ==========================================
+async function renderEmployeePanel() {
+    const list = document.getElementById('employee-list');
+    const snap = await db.collection('users').get();
+    list.innerHTML = "";
+    
+    snap.forEach(doc => {
+        const u = doc.data();
+        list.innerHTML += `
+            <div class="flex justify-between p-2 bg-slate-800/50 mb-1 rounded border border-slate-700 items-center">
+                <div><span class="font-bold text-blue-400">${doc.id}</span> <span class="text-xs text-slate-500">(${u.rank})</span></div>
+                <button onclick="removeUser('${doc.id}')" class="text-red-500 text-xs hover:underline">Entfernen</button>
+            </div>`;
+    });
+}
+
+async function uiRegisterEmployee() {
+    const u = document.getElementById('m-user').value;
+    const p = document.getElementById('m-pass').value;
+    const d = document.getElementById('m-dept').value;
+    const r = document.getElementById('m-rank').value;
+    
+    if(!u || !p) return alert("Daten fehlen.");
+    await db.collection('users').doc(u).set({ password: p, department: d, rank: r });
+    alert("Angelegt.");
+    renderEmployeePanel();
+}
+
+async function removeUser(id) {
+    if(confirm("Löschen?")) {
+        await db.collection('users').doc(id).delete();
+        renderEmployeePanel();
+    }
+}
+
+// ==========================================
+// 9. SPECIAL DEPARTMENTS (Judge / IA)
+// ==========================================
+
+async function loadCourtRecords() {
+    const list = document.getElementById('court-record-list');
+    if(!list) return;
+    const query = db.collection('court_records').orderBy('timestamp', 'desc');
+    const snap = await query.get();
+    list.innerHTML = "";
+    
+    snap.forEach(doc => {
+        const c = doc.data();
+        list.innerHTML += `
+            <div class="glass-panel p-4 border-l-4 ${c.status==='OPEN' ? 'border-green-500' : 'border-slate-600'}">
+                <div class="flex justify-between">
+                    <span class="font-bold text-purple-400">${c.title}</span>
+                    <span class="text-xs bg-slate-900 px-2 rounded">${c.status}</span>
+                </div>
+                <p class="text-xs text-slate-400 mt-2">${c.decision ? c.decision.substring(0,100) : 'Kein Urteil'}...</p>
+                <button onclick="openCourtModal('${doc.id}')" class="text-xs mt-2 text-purple-400 underline">Bearbeiten</button>
+            </div>`;
+    });
+}
+
+function openCourtModal(id = null) {
+    document.getElementById('modal-court').classList.remove('hidden');
+}
+
+async function saveCourtRecord() {
+    const title = document.getElementById('c-title').value;
+    const decision = document.getElementById('c-decision').value;
+    const status = document.getElementById('c-status').value;
+    
+    await db.collection('court_records').add({
+        title, decision, status,
+        judge: currentUser.username,
+        timestamp: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    alert("Akte gespeichert.");
+    closeModal();
+    loadCourtRecords();
+}
+
+async function loadIACases() {
+    if(currentUser.rank !== "Attorney General") return;
+    const list = document.getElementById('ia-case-list');
+    const snap = await db.collection('internal_affairs').orderBy('timestamp', 'desc').get();
+    list.innerHTML = "";
+    
+    snap.forEach(doc => {
+        const c = doc.data();
+        list.innerHTML += `
+            <div class="glass-panel p-4 border-l-4 border-red-600">
+                <h4 class="font-bold text-red-500">${c.target_officer}</h4>
+                <p class="text-xs text-slate-300">${c.reason}</p>
+            </div>`;
+    });
+}
+
+function openIAModal() {
+    document.getElementById('modal-ia').classList.remove('hidden');
+}
+
+async function saveIACase() {
+    const target = document.getElementById('ia-target').value;
+    const reason = document.getElementById('ia-reason').value;
+    
+    await db.collection('internal_affairs').add({
+        target_officer: target,
+        reason: reason,
+        creator: currentUser.username,
+        timestamp: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    alert("IA Fall angelegt.");
+    closeModal();
+    loadIACases();
+}
